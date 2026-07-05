@@ -19,7 +19,7 @@ _FETCH_BATCH_SIZE = 15
 _FETCH_BATCH_DELAY = 1.0
 
 # Cache centralisé — UN seul fetch Deribit toutes les 60s minimum
-_CACHE_TTL = 60.0        # secondes entre deux fetches complets
+_CACHE_TTL = 45.0        # secondes entre deux fetches — 45s evite la resonance TTL avec les crons 60s
 _MAX_BACKOFF = 300.0     # backoff max 5min si over_limit répété
 
 log = logging.getLogger(__name__)

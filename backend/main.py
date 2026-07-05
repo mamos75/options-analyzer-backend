@@ -631,6 +631,160 @@ def _mp_dict(mp: MaxPainExpiry) -> dict:
     }
 
 
+
+
+@app.get("/api/snapshot")
+async def get_snapshot():
+    """
+    Endpoint agregatif B5 — retourne tous les payloads en un seul appel HTTP.
+
+    Avantage : un seul fetch Deribit, coherence garantie (meme snapshot_ts pour tous).
+    Structure : { snapshot_ts, spot, dashboard, walls, squeeze, dealer, narrative, bme_status }
+
+    Le frontend peut utiliser cet endpoint au lieu des 8 appels individuels.
+    Fallback cote frontend : si 404, repliement sur les 8 endpoints individuels.
+    """
+    try:
+        snapshot = await deribit.get_cached_snapshot()
+    except Exception as e:
+        raise HTTPException(502, f"Deribit error: {e}")
+
+    snap_ts  = snapshot.timestamp
+    spot     = snapshot.btc_price
+
+    # ── Calculs partages (1x par snapshot) ────────────────────────────────────
+    gex = compute_gex(snapshot)
+    mopi = compute_mopi(
+        snapshot, gex, iv_history_cache,
+        gex_near_cap=_gex_calibration_cache["cap_value"],
+        cap_mode=_gex_calibration_cache["cap_mode"],
+        saturation_rate_7d=_gex_calibration_cache.get("saturation_rate_7d"),
+    )
+    weather = compute_weather(gex, mopi)
+    dp = compute_dealer_pressure(snapshot)
+    sq = compute_squeeze_score(snapshot, gex, dp, mopi.iv_rank)
+    walls_all = compute_options_walls_horizons(snapshot)
+    walls_near = walls_all.get("near") or compute_options_walls(snapshot)
+
+    # ── Gravity map ────────────────────────────────────────────────────────────
+    try:
+        from .gravity_map import compute_gravity_map
+        gravity = compute_gravity_map(snapshot, gex)
+        gravity_data = {
+            "btc_price": spot,
+            "timestamp": snap_ts,
+            "zones": [
+                {
+                    "level": z.level, "strength": round(z.strength, 3),
+                    "type": z.zone_type, "label": z.label, "active": z.active,
+                }
+                for z in (gravity.zones if gravity else [])
+            ],
+        }
+    except Exception as e:
+        log.warning(f"[snapshot] gravity error: {e}")
+        gravity_data = {"error": str(e), "timestamp": snap_ts}
+
+    # ── Narrative ──────────────────────────────────────────────────────────────
+    try:
+        from .narrative_resolver import resolve_narrative
+        from .gex_activity_audit import compute_gex_activity_audit, compute_flip_activity_audit
+        from .gravity_activity_audit import compute_gravity_activity_audit
+        _audit  = compute_gex_activity_audit(snapshot)
+        _flip   = compute_flip_activity_audit(snapshot, gex)
+        _gaudit = compute_gravity_activity_audit(snapshot, gex)
+        gmap_lv = compute_gravity_map(snapshot, gex)
+        dex_lv  = compute_dex_levels(snapshot)
+        narrative_out = resolve_narrative(
+            mopi=mopi, gex=gex, dp=dp, gmap=gmap_lv,
+            walls=walls_near, sq=sq, spot=spot,
+            audit=_audit, dex_levels=dex_lv,
+            gravity_audit=_gaudit, flip_audit=_flip,
+        )
+        narrative_data = narrative_out if isinstance(narrative_out, dict) else vars(narrative_out)
+        narrative_data["timestamp"] = snap_ts
+    except Exception as e:
+        log.warning(f"[snapshot] narrative error: {e}")
+        narrative_data = {"error": str(e), "timestamp": snap_ts}
+
+    # ── BME status ─────────────────────────────────────────────────────────────
+    try:
+        from .btc_momentum_engine import get_bme
+        bme = get_bme()
+        bme_status_data = bme.get_status()
+        bme_backtests = {}
+        for hz in ["4h", "24h", "72h"]:
+            if bme_status_data["horizons"][hz]["model_ready"]:
+                bme_backtests[hz] = bme.backtest(hz, last_n=200)
+        bme_data = {"status": bme_status_data, "backtests": bme_backtests}
+    except Exception as e:
+        log.warning(f"[snapshot] bme_status error: {e}")
+        bme_data = {"error": str(e)}
+
+    # ── Dashboard payload ──────────────────────────────────────────────────────
+    hist_24h = history_store.get_history(1)
+    mopi_delta_24h = round(mopi.score - hist_24h[0]["mopi"], 1) if hist_24h else None
+
+    dashboard_data = {
+        "btc_price":             spot,
+        "gex_total":             gex.total_gex,
+        "gex_regime":            gex.regime,
+        "flip_level":            gex.flip_level,
+        "mopi_score":            mopi.score,
+        "mopi_label":            mopi.label,
+        "mopi_emoji":            mopi.emoji,
+        "iv_rank":               mopi.iv_rank,
+        "mopi_squeeze_heuristic": mopi.mopi_squeeze_heuristic,
+        "squeeze_prob":          mopi.squeeze_prob,  # DEPRECATED alias
+        "weather_state":         weather.state,
+        "weather_emoji":         weather.emoji,
+        "weather_description":   weather.description,
+        "mopi_delta_24h":        mopi_delta_24h,
+        "timestamp":             snap_ts,
+    }
+
+    # ── Dealer payload ─────────────────────────────────────────────────────────
+    dex_lv_h = compute_dex_levels(snapshot)
+    dealer_data = {
+        "btc_price": spot,
+        "direction": dp.direction,
+        "pressure_pct": dp.pressure_pct,
+        "structural": dex_lv_h.structural if dex_lv_h else None,
+        "active": dex_lv_h.active if dex_lv_h else None,
+        "actionable": dex_lv_h.actionable if dex_lv_h else None,
+        "timestamp": snap_ts,
+    }
+
+    # ── Squeeze payload ────────────────────────────────────────────────────────
+    squeeze_data = {
+        "btc_price": spot,
+        "score": sq.score,
+        "label": sq.label,
+        "emoji": sq.emoji,
+        "direction_bias": sq.direction_bias,
+        "timestamp": snap_ts,
+    }
+
+    # ── Walls payload ──────────────────────────────────────────────────────────
+    walls_data = {
+        **_serialize_walls_profile(walls_near, snap_ts),
+        "horizons": {
+            k: _serialize_walls_profile(v, snap_ts) for k, v in walls_all.items()
+        },
+    }
+
+    return {
+        "snapshot_ts":  snap_ts,
+        "spot":         spot,
+        "dashboard":    dashboard_data,
+        "walls":        walls_data,
+        "dealer":       dealer_data,
+        "squeeze":      squeeze_data,
+        "narrative":    narrative_data,
+        "gravity":      gravity_data,
+        "bme_status":   bme_data,
+    }
+
 @app.get("/api/dashboard", response_model=DashboardResponse)
 async def get_dashboard():
     try:
