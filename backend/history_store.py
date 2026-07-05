@@ -47,6 +47,13 @@ def init_db():
             except sqlite3.OperationalError:
                 pass  # colonne déjà présente
 
+        # B7 — vex/cex columns (migration safe)
+        for col in ("vex REAL DEFAULT 0.0", "cex REAL DEFAULT 0.0"):
+            try:
+                c.execute(f"ALTER TABLE metrics_history ADD COLUMN {col}")
+            except Exception:
+                pass  # already exists
+
         # Table historique Probability Engine — un snapshot complet par intervalle
         c.execute("""
             CREATE TABLE IF NOT EXISTS pe_snapshots (
@@ -90,14 +97,16 @@ def save_snapshot(
     btc_price: float,
     pc_ratio_near: float = 0.0,
     gex_near: float = 0.0,
+    vex: float = 0.0,
+    cex: float = 0.0,
 ):
     ts = int(time.time())
     with _conn() as c:
         c.execute(
             "INSERT INTO metrics_history"
-            "(ts,mopi,gex,dex,iv_rank,pc_ratio,max_pain,flip_level,btc_price,pc_ratio_near,gex_near)"
-            " VALUES(?,?,?,?,?,?,?,?,?,?,?)",
-            (ts, mopi, gex, dex, iv_rank, pc_ratio, max_pain, flip_level, btc_price, pc_ratio_near, gex_near),
+            "(ts,mopi,gex,dex,iv_rank,pc_ratio,max_pain,flip_level,btc_price,pc_ratio_near,gex_near,vex,cex)"
+            " VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (ts, mopi, gex, dex, iv_rank, pc_ratio, max_pain, flip_level, btc_price, pc_ratio_near, gex_near, vex, cex),
         )
         c.commit()
 
@@ -290,3 +299,15 @@ def get_history(days: int, filter_outliers: bool = True) -> List[Dict]:
     if filter_outliers:
         data = _filter_gex_outliers(data)
     return data
+
+
+def get_vex_cex_history(days: int = 7) -> List[Dict]:
+    """Historique VEX/CEX par période."""
+    cutoff = int(time.time()) - days * 86400
+    with _conn() as c:
+        rows = c.execute(
+            "SELECT ts, vex, cex FROM metrics_history "
+            "WHERE ts >= ? AND vex IS NOT NULL ORDER BY ts ASC",
+            (cutoff,),
+        ).fetchall()
+    return [{"ts": r[0], "vex": r[1] or 0.0, "cex": r[2] or 0.0} for r in rows]

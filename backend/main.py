@@ -177,6 +177,8 @@ async def _history_saver():
                 if len(iv_history_cache) > _IV_HISTORY_MAX:
                     iv_history_cache.pop(0)
 
+            from .vex_cex import compute_vex_cex as _compute_vex_cex
+            vc = _compute_vex_cex(snapshot)
             history_store.save_snapshot(
                 mopi=mopi.score,
                 gex=gex.total_gex,
@@ -188,6 +190,8 @@ async def _history_saver():
                 btc_price=snapshot.btc_price,
                 pc_ratio_near=mopi.pc_ratio_near,  # court terme ≤14j — source alertes
                 gex_near=gex.gex_near,             # near-term gamma effectif (DTE ≤ 14)
+                vex=vc.vex_total,
+                cex=vc.cex_total,
             )
 
             # ── Probability Engine snapshot ──────────────────────────────────
@@ -1011,6 +1015,45 @@ async def get_dealer_pressure():
         "dex_active_pct": dex.dex_active_pct,
         "dex_actionable_pct": dex.dex_actionable_pct,
         "timestamp": snapshot.timestamp,
+    }
+
+
+@app.get("/api/vex_cex")
+async def get_vex_cex():
+    """VEX (Vanna Exposure) et CEX (Charm Exposure) des dealers."""
+    from .vex_cex import compute_vex_cex
+    snapshot = await deribit.get_cached_snapshot()
+    profile = compute_vex_cex(snapshot)
+    return {
+        "vex_total":               profile.vex_total,
+        "cex_total":               profile.cex_total,
+        "vex_total_fmt":           profile.vex_total_fmt,
+        "cex_total_fmt":           profile.cex_total_fmt,
+        "vex_direction":           profile.vex_direction,
+        "cex_direction":           profile.cex_direction,
+        "vex_interpretation":      profile.vex_interpretation,
+        "cex_interpretation":      profile.cex_interpretation,
+        "vex_by_strike":           profile.vex_by_strike,
+        "cex_by_strike":           profile.cex_by_strike,
+        "gamma_flip":              profile.gamma_flip,
+        "gamma_flip_dist_pct":     profile.gamma_flip_dist_pct,
+        "gamma_flip_side":         profile.gamma_flip_side,
+        "gamma_flip_regime":       profile.gamma_flip_regime,
+        "gamma_flip_interpretation": profile.gamma_flip_interpretation,
+        "btc_price":               profile.btc_price,
+        "timestamp":               profile.timestamp,
+    }
+
+
+@app.get("/api/vex_cex_history")
+async def get_vex_cex_history(period: str = "7d"):
+    """Historique VEX/CEX depuis la base."""
+    days = {"7d": 7, "14d": 14, "30d": 30}.get(period, 7)
+    rows = history_store.get_vex_cex_history(days)
+    return {
+        "period":   period,
+        "n_points": len(rows),
+        "points":   rows,
     }
 
 
