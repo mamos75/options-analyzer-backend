@@ -161,7 +161,7 @@ def compute_vex_cex(snapshot: MarketSnapshot) -> VexCexProfile:
     flip_regime = regime_map.get(gex_prof.regime, gex_prof.regime)
 
     flip_interp = (
-        f"GEX {flip_regime} : le spot est {'au-dessus' if flip_side == 'above' else 'en-dessous'} du Gamma Flip."
+        f"GEX {flip_regime} : Gamma Flip {'au-dessus' if flip_side == 'above' else 'en-dessous'} du spot."
         if flip is not None else
         "Gamma Flip non detecte dans la zone de marche actuelle."
     )

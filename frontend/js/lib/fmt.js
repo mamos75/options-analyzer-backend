@@ -29,7 +29,9 @@ export function fmtPrice(val, decimals) {
 
 export function fmtPct(val) {
   if (val == null) return '\u2014';
-  return Math.round(val) + '%';
+  const n = Number(val);
+  if (!Number.isFinite(n)) return '\u2014';
+  return Math.round(n) + '%';
 }
 
 export function formatModelName(slug) {
