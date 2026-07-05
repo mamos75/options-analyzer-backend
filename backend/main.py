@@ -607,6 +607,7 @@ class DashboardResponse(BaseModel):
     weather_state: str
     weather_emoji: str
     weather_description: str
+    weather_color: str = "#eab308"  # B6: couleur hex du regime meteo (frontend n'a plus de map locale)
     timestamp: float
     data_stale: bool = False  # True = Deribit rate-limited, données du dernier snapshot valide
     mopi_delta_24h: Optional[float] = None
@@ -739,6 +740,7 @@ async def get_snapshot():
         "weather_state":         weather.state,
         "weather_emoji":         weather.emoji,
         "weather_description":   weather.description,
+        "weather_color":         weather.color,  # B6: couleur hex serveur
         "mopi_delta_24h":        mopi_delta_24h,
         "timestamp":             snap_ts,
     }
@@ -827,6 +829,7 @@ async def get_dashboard():
         weather_state=weather.state,
         weather_emoji=weather.emoji,
         weather_description=weather.description,
+        weather_color=weather.color,
         timestamp=snapshot.timestamp,
         data_stale=deribit.data_stale,
         mopi_delta_24h=mopi_delta_24h,

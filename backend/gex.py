@@ -130,10 +130,10 @@ def compute_gex(snapshot: MarketSnapshot) -> GEXProfile:
     put_gex: Dict[float, float] = {}
 
     for opt in snapshot.options:
-        # GEX dealer = -position market maker
-        # Market maker vend des calls → delta short call → gamma positif côté dealer
-        # Market maker vend des puts → gamma positif côté dealer aussi
-        # Convention: call GEX positif (hedging stabilisant), put GEX négatif
+        # GEX dealer — hypothese : clients longs options (calls ET puts)
+        # → dealer short calls et short puts (hypothese simplificatrice mixte)
+        # Resultat : call GEX = +gamma (hedging pro-tendance) ; put GEX = -gamma (contra-tendance)
+        # NOTE B6 : hypothese differente de DEX (short-all). Voir API_CONTRACT.md "Conventions dealer".
         g = opt.gamma * opt.oi * CONTRACT_SIZE * (spot ** 2)
 
         if opt.option_type == "call":
