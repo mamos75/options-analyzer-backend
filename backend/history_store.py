@@ -53,6 +53,11 @@ def init_db():
                 c.execute(f"ALTER TABLE metrics_history ADD COLUMN {col}")
             except Exception:
                 pass  # already exists
+        # V4 — convention versioning (1=CP-skew obsolete, 2=short-all)
+        try:
+            c.execute("ALTER TABLE metrics_history ADD COLUMN vex_convention INTEGER DEFAULT 1")
+        except Exception:
+            pass  # already exists
 
         # Table historique Probability Engine — un snapshot complet par intervalle
         c.execute("""
@@ -104,9 +109,9 @@ def save_snapshot(
     with _conn() as c:
         c.execute(
             "INSERT INTO metrics_history"
-            "(ts,mopi,gex,dex,iv_rank,pc_ratio,max_pain,flip_level,btc_price,pc_ratio_near,gex_near,vex,cex)"
-            " VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            (ts, mopi, gex, dex, iv_rank, pc_ratio, max_pain, flip_level, btc_price, pc_ratio_near, gex_near, vex, cex),
+            "(ts,mopi,gex,dex,iv_rank,pc_ratio,max_pain,flip_level,btc_price,pc_ratio_near,gex_near,vex,cex,vex_convention)"
+            " VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (ts, mopi, gex, dex, iv_rank, pc_ratio, max_pain, flip_level, btc_price, pc_ratio_near, gex_near, vex, cex, 2),
         )
         c.commit()
 
@@ -302,12 +307,16 @@ def get_history(days: int, filter_outliers: bool = True) -> List[Dict]:
 
 
 def get_vex_cex_history(days: int = 7) -> List[Dict]:
-    """Historique VEX/CEX par période."""
+    """Historique VEX/CEX par periode — filtre sur convention v2 (short-all) uniquement.
+
+    Les lignes v1 (CP-skew, avant 2026-07-06) sont exclues pour eviter les trends
+    calcules a cheval sur deux conventions incompatibles.
+    """
     cutoff = int(time.time()) - days * 86400
     with _conn() as c:
         rows = c.execute(
-            "SELECT ts, vex, cex FROM metrics_history "
-            "WHERE ts >= ? AND vex IS NOT NULL ORDER BY ts ASC",
+            "SELECT ts, vex, cex, vex_convention FROM metrics_history "
+            "WHERE ts >= ? AND vex IS NOT NULL AND vex_convention = 2 ORDER BY ts ASC",
             (cutoff,),
         ).fetchall()
     return [{"ts": r[0], "vex": r[1] or 0.0, "cex": r[2] or 0.0} for r in rows]

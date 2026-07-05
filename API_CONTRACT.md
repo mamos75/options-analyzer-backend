@@ -77,26 +77,44 @@ Les 8 endpoints individuels restent disponibles (compatibilité frontend embarqu
 
 ---
 
-## Conventions dealer (B6)
+## Conventions dealer (V4 — arrêté 2026-07-06)
 
-Le dashboard utilise **deux hypothèses** différentes selon le module :
+Tableau récapitulatif des quatre mesures d'exposition dealer :
 
-### GEX — hypothèse mixte (clients longs options)
+| Mesure | Hypothèse dealer | Formule (par option) | Unité |
+|---|---|---|---|
+| **GEX** | Mixte : clients longs calls ET longs puts | `GEX_call = +γ×OI×S²` / `GEX_put = −γ×OI×S²` | $ |
+| **DEX** | Short-all : dealer short toutes options | `DEX = −δ×OI×S` | $ |
+| **VEX** | Short-all (v2) : dealer short toutes options | `VEX = −vanna×OI×S` (calls ET puts) | $ |
+| **CEX** | Short-all (v2) : dealer short toutes options | `CEX = −charm×OI` (calls ET puts) | Δ BTC/jour |
+
+### GEX — hypothèse mixte (assumée, documentée)
 ```
 GEX_call = +gamma × OI × spot²    (stabilisant — hedging pro-tendance)
 GEX_put  = -gamma × OI × spot²    (déstabilisant — contra-tendance)
 ```
-**Hypothèse :** les clients sont longs sur calls ET sur puts.
-Le dealer est donc short calls et short puts.
+**Hypothèse :** clients longs calls ET puts → dealer short calls et short puts.
+Cette convention mixte est différente du DEX/VEX/CEX — **assumée et documentée**, pas un accident.
 
-### DEX — hypothèse short-all (dealers short toutes options)
+### DEX, VEX, CEX — hypothèse short-all (cohérents entre eux)
 ```
-DEX = -delta_instrument × OI × spot
+DEX = -delta  × OI × spot          (calls et puts : même formule)
+VEX = -vanna  × OI × spot          (calls et puts : même formule)
+CEX = -charm  × OI                 (calls et puts : même formule, unité : Δ/jour)
 ```
-**Hypothèse :** dealer short toutes les options (calls et puts).
+**Hypothèse :** dealer short toutes les options uniformément.
 
-**Pourquoi deux hypothèses ?** Les deux approches capturent des aspects complémentaires du flow.
-Décision de les unifier ou non : à valider avec les données réelles (B6 — pending).
+**Sémantique VEX/CEX :**
+- `VEX > 0` : un choc de vol (IV↑) force les dealers à **acheter** du BTC (delta net monte).
+- `VEX < 0` : un choc de vol force les dealers à **vendre** du BTC.
+- `CEX > 0` : le passage du temps (theta) pousse les dealers à **acheter** du BTC.
+- `CEX > 0` : le passage du temps pousse les dealers à **vendre** du BTC.
+- **Unité CEX : Δ BTC/jour** — ne pas diviser par 1e6 côté frontend (≠ VEX en $).
+
+**Rupture d'historique VEX/CEX :** convention v1 (CP-skew, avant 2026-07-06) et v2 (short-all,
+à partir du 2026-07-06) sont incompatibles. Le champ `vex_convention` dans `metrics_history`
+identifie chaque ligne. `get_vex_cex_history()` filtre sur v2 uniquement — jamais de trend
+calculé à cheval sur les deux conventions.
 
 ---
 

@@ -20,11 +20,21 @@ export async function loadVexCex(signal) {
     ? (data.gamma_flip_dist_pct > 0 ? '+' : '') + data.gamma_flip_dist_pct.toFixed(1) + '%'
     : '—';
 
+  const _fmtVex = v => {
+    const a = Math.abs(v), s = v >= 0 ? '+' : '-';
+    return a >= 1e9 ? s+(a/1e9).toFixed(2)+'B' : a >= 1e6 ? s+(a/1e6).toFixed(1)+'M' : s+Math.round(a).toLocaleString();
+  };
+  // CEX is in BTC/day — not dollars, no /1e6
+  const _fmtCex = v => {
+    const a = Math.abs(v), s = v >= 0 ? '+' : '-';
+    return a >= 1000 ? s+(a/1000).toFixed(1)+'K Δ/j' : s+a.toFixed(1)+' Δ/j';
+  };
+
   const vexStrikes = (data.vex_by_strike || []).map(s =>
-    `<span class="vex-cex-chip" title="VEX: ${s.vex >= 0 ? '+' : ''}${(s.vex/1e6).toFixed(1)}M">$${Math.round(s.strike).toLocaleString()}</span>`
+    `<span class="vex-cex-chip" title="VEX: ${_fmtVex(s.vex)}">$${Math.round(s.strike).toLocaleString()}</span>`
   ).join('');
   const cexStrikes = (data.cex_by_strike || []).map(s =>
-    `<span class="vex-cex-chip" title="CEX: ${s.cex >= 0 ? '+' : ''}${(s.cex/1e6).toFixed(1)}M">$${Math.round(s.strike).toLocaleString()}</span>`
+    `<span class="vex-cex-chip" title="CEX: ${_fmtCex(s.cex)}">$${Math.round(s.strike).toLocaleString()}</span>`
   ).join('');
 
   // Get GEX/DEX from the already-loaded mopi data if available, else from context
@@ -131,8 +141,13 @@ export function setVcPeriod(p, btn) {
 
 export async function drawVcCharts(period, signal) {
   const data = await apiFetch('/api/vex_cex_history?period=' + period, signal);
-  if (!data || !data.points || data.points.length < 2) {
-    // Show "pas encore d'historique" message on canvases
+  const pts = data?.points || [];
+  // V4: convention v2 (short-all) launched 2026-07-06 — fewer than 10 points = recalibration
+  const recalibrating = pts.length > 0 && pts.length < 10;
+  if (!data || pts.length < 2) {
+    const msg = recalibrating
+      ? 'Trends en recalibration — convention v2 (short-all, 2026-07-06)…'
+      : 'Historique en cours de collecte…';
     ['vc-vex-canvas', 'vc-cex-canvas'].forEach(id => {
       const el = document.getElementById(id);
       if (!el) return;
@@ -147,7 +162,7 @@ export async function drawVcCharts(period, signal) {
       ctx.fillStyle = 'rgba(148,163,184,0.4)';
       ctx.font = '11px system-ui';
       ctx.textAlign = 'center';
-      ctx.fillText('Historique en cours de collecte…', (rect.width || 300) / 2, (rect.height || 72) / 2 + 4);
+      ctx.fillText(msg, (rect.width || 300) / 2, (rect.height || 72) / 2 + 4);
     });
     return;
   }

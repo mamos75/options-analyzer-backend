@@ -1,10 +1,25 @@
 """
 vex_cex.py — Vanna Exposure (VEX) et Charm Exposure (CEX).
 
-VEX = Sigma(vanna x OI x spot)  — sensibilite du flow dealer a un mouvement de vol implicite.
-CEX = Sigma(charm x OI)         — decay du flow dealer dans le temps (theta du delta).
+VEX = Sigma(vanna_dealer x OI x spot)  — sensibilite du flow dealer a un mouvement de vol.
+CEX = Sigma(charm_dealer x OI)         — decay du delta dealer dans le temps (par jour).
 
-Hypothese : dealers short toutes les options (calls et puts) — meme convention que DEX.
+Convention (v2, short-all) : dealers short TOUTES les options — meme hypothese que DEX.
+  vanna_dealer = -vanna_client (pour calls ET pour puts)
+  charm_dealer = -charm_client (pour calls ET pour puts)
+
+  => vex  = -vanna * OI * spot   (calls et puts : meme signe)
+  => cex  = -charm * OI          (calls et puts : meme signe)
+
+  VEX > 0 : un choc de vol implicite (IV monte) force les dealers a acheter du BTC
+            (leur delta net monte -> ils achtent pour rester hedges).
+  VEX < 0 : un choc de vol implicite force les dealers a vendre du BTC.
+  CEX > 0 : le temps qui passe (theta) pousse les dealers a acheter du BTC.
+  CEX < 0 : le temps qui passe pousse les dealers a vendre du BTC.
+
+Convention v1 (obsolete, CP-skew) : calls et puts de signes opposes —
+  mesurait le desequilibre C/P pondere vanna, pas la vanna nette dealer.
+  Rupture : 2026-07-06. L'historique anterieur est marque vex_convention=1.
 
 Formules Black-Scholes :
   d1   = (ln(S/K) + (r + 0.5*sigma**2)*T) / (sigma*sqrt(T))
@@ -112,12 +127,10 @@ def compute_vex_cex(snapshot: MarketSnapshot) -> VexCexProfile:
         van = _vanna(d1, d2, iv)
         cha = _charm(d1, d2, iv, T)
 
-        if opt.option_type == "call":
-            vex =  van * opt.oi * spot
-            cex = -cha * opt.oi
-        else:
-            vex = -van * opt.oi * spot
-            cex =  cha * opt.oi
+        # Convention short-all (v2) : dealer short calls ET puts uniformement
+        # vanna_dealer = -vanna_client, charm_dealer = -charm_client
+        vex = -van * opt.oi * spot
+        cex = -cha * opt.oi
 
         vex_map[opt.strike] = vex_map.get(opt.strike, 0.0) + vex
         cex_map[opt.strike] = cex_map.get(opt.strike, 0.0) + cex
@@ -133,17 +146,18 @@ def compute_vex_cex(snapshot: MarketSnapshot) -> VexCexProfile:
     cex_dir = ("BULLISH_CHARM" if cex_total >  _CEX_NEUTRAL_THRESH else
                "BEARISH_CHARM" if cex_total < -_CEX_NEUTRAL_THRESH else "NEUTRAL")
 
+    # Interpretations coherentes avec la convention short-all (v2)
     vex_interp = (
-        "VEX+ : une hausse de vol implicite pousse les dealers a acheter du BTC."
+        "VEX+ : un choc de vol implicite (IV hausse) force les dealers a acheter du BTC."
         if vex_total > _VEX_NEUTRAL_THRESH else
-        "VEX- : une hausse de vol implicite oblige les dealers a vendre du BTC."
+        "VEX- : un choc de vol implicite (IV hausse) force les dealers a vendre du BTC."
         if vex_total < -_VEX_NEUTRAL_THRESH else
         "VEX neutre : la vanna n'exerce pas de pression directionnelle significative."
     )
     cex_interp = (
-        "CEX+ : le temps qui passe pousse les dealers a acheter du BTC."
+        "CEX+ : le temps qui passe (theta) pousse les dealers a acheter du BTC."
         if cex_total > _CEX_NEUTRAL_THRESH else
-        "CEX- : le temps qui passe oblige les dealers a vendre du BTC."
+        "CEX- : le temps qui passe (theta) oblige les dealers a vendre du BTC."
         if cex_total < -_CEX_NEUTRAL_THRESH else
         "CEX neutre : le charm decay n'exerce pas de pression directionnelle significative."
     )
