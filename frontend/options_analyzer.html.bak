@@ -1,0 +1,3266 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mamos Options — BTC Analysis</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #070c18;
+    --surface: #0d1525;
+    --card: #111a2e;
+    --green: #00d47e;
+    --red: #ff3c6b;
+    --yellow: #f5a623;
+    --blue: #3d8eff;
+    --purple: #9b6bff;
+    --text: #e8eaf0;
+    --muted: #5a6478;
+    --border: rgba(255,255,255,0.06);
+    --border-hover: rgba(255,255,255,0.12);
+  }
+
+  html { font-size: 16px; }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ─── ANIMATIONS ─── */
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(0.85); }
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes barFill {
+    from { width: 0%; }
+    to { width: var(--target-width); }
+  }
+  @keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+  @keyframes glow-green {
+    0%, 100% { box-shadow: 0 0 8px rgba(0,212,126,0.3); }
+    50% { box-shadow: 0 0 24px rgba(0,212,126,0.7); }
+  }
+
+  /* ─── OVERLAY SCREENS ─── */
+  .overlay-screen {
+    position: fixed; inset: 0;
+    background: var(--bg);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 1000;
+    animation: fadeIn 0.4s ease;
+  }
+  .overlay-screen.hidden { display: none; }
+
+  .auth-box {
+    width: 100%; max-width: 440px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 48px 40px;
+    margin: 16px;
+    box-shadow: 0 32px 80px rgba(0,0,0,0.6);
+    animation: fadeIn 0.5s ease;
+  }
+
+  .auth-logo {
+    text-align: center;
+    margin-bottom: 32px;
+  }
+  .auth-logo-mark {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 64px; height: 64px;
+    background: linear-gradient(135deg, var(--blue), var(--purple));
+    border-radius: 16px;
+    font-size: 28px; font-weight: 900;
+    color: #fff;
+    margin-bottom: 16px;
+    box-shadow: 0 8px 32px rgba(61,142,255,0.4);
+  }
+  .auth-title {
+    font-size: 24px; font-weight: 800;
+    color: #fff;
+    letter-spacing: -0.5px;
+    margin-bottom: 6px;
+  }
+  .auth-subtitle {
+    font-size: 13px; color: var(--muted);
+    font-weight: 400;
+  }
+
+  .btn-patreon {
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    width: 100%;
+    background: linear-gradient(135deg, #f96854, #e85d42);
+    color: #fff;
+    border: none; border-radius: 12px;
+    padding: 14px 20px;
+    font-size: 15px; font-weight: 700;
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.15s;
+    text-decoration: none;
+    box-shadow: 0 4px 20px rgba(249,104,84,0.4);
+    margin-bottom: 24px;
+  }
+  .btn-patreon:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 32px rgba(249,104,84,0.5);
+  }
+  .btn-patreon:active { transform: translateY(0); }
+
+  .divider {
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: 24px; color: var(--muted); font-size: 12px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 1px;
+  }
+  .divider::before, .divider::after {
+    content: ''; flex: 1; height: 1px; background: var(--border);
+  }
+
+  .form-group { margin-bottom: 14px; }
+  .form-label { display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .form-input {
+    width: 100%;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 11px 14px;
+    font-size: 14px; font-family: 'Inter', sans-serif;
+    color: var(--text);
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .form-input:focus { border-color: var(--blue); }
+  .form-input::placeholder { color: var(--muted); }
+
+  .btn-login {
+    width: 100%;
+    background: var(--blue);
+    color: #fff; border: none; border-radius: 10px;
+    padding: 12px; font-size: 14px; font-weight: 700;
+    cursor: pointer; transition: background 0.2s, transform 0.1s;
+    font-family: 'Inter', sans-serif;
+    margin-top: 4px;
+  }
+  .btn-login:hover { background: #5a9fff; }
+  .btn-login:active { transform: scale(0.99); }
+
+  .auth-note { text-align: center; font-size: 12px; color: var(--muted); margin-top: 20px; }
+  .auth-error { background: rgba(255,60,107,0.12); border: 1px solid rgba(255,60,107,0.3); border-radius: 8px; padding: 10px 14px; font-size: 13px; color: var(--red); margin-bottom: 14px; display: none; }
+  .auth-error.visible { display: block; }
+
+  /* Upgrade wall */
+  .upgrade-badge {
+    display: inline-block;
+    background: rgba(155,107,255,0.15);
+    border: 1px solid rgba(155,107,255,0.3);
+    color: var(--purple);
+    border-radius: 20px;
+    padding: 4px 12px;
+    font-size: 12px; font-weight: 600;
+    margin-bottom: 16px;
+  }
+  .btn-upgrade {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: linear-gradient(135deg, var(--purple), var(--blue));
+    color: #fff; border: none; border-radius: 12px;
+    padding: 14px 28px; font-size: 15px; font-weight: 700;
+    cursor: pointer; text-decoration: none;
+    box-shadow: 0 4px 20px rgba(155,107,255,0.4);
+    margin-top: 8px;
+    transition: transform 0.15s, box-shadow 0.15s;
+  }
+  .btn-upgrade:hover { transform: translateY(-1px); box-shadow: 0 8px 32px rgba(155,107,255,0.5); }
+  .upgrade-plan-pill {
+    background: rgba(245,166,35,0.12);
+    border: 1px solid rgba(245,166,35,0.3);
+    color: var(--yellow);
+    border-radius: 20px; padding: 4px 12px;
+    font-size: 12px; font-weight: 600;
+    display: inline-block; margin-bottom: 16px;
+  }
+
+  /* ─── LOADING SCREEN ─── */
+  #loading-screen {
+    position: fixed; inset: 0; background: var(--bg);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    z-index: 999;
+  }
+  #loading-screen.hidden { display: none; }
+  .loader-ring {
+    width: 48px; height: 48px;
+    border: 3px solid var(--border);
+    border-top-color: var(--blue);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-bottom: 16px;
+  }
+  .loader-text { font-size: 13px; color: var(--muted); }
+
+  /* ─── MAIN DASHBOARD ─── */
+  #dashboard { display: none; min-height: 100vh; }
+  #dashboard.visible { display: block; }
+
+  /* ─── HEADER ─── */
+  .header {
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(7,12,24,0.92);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    height: 64px;
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 16px;
+  }
+
+  .header-logo {
+    font-size: 15px; font-weight: 900; letter-spacing: 2px;
+    color: #fff; flex-shrink: 0;
+    background: linear-gradient(90deg, var(--blue), var(--purple));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .header-price {
+    font-size: 22px; font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.5px;
+    transition: color 0.3s;
+  }
+  .header-price.up { color: var(--green); }
+  .header-price.down { color: var(--red); }
+  .header-price.neutral { color: var(--text); }
+
+  .header-right {
+    display: flex; align-items: center; gap: 14px; flex-shrink: 0;
+  }
+
+  .live-indicator {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 12px; font-weight: 600; color: var(--green);
+  }
+  .live-dot {
+    width: 8px; height: 8px; background: var(--green);
+    border-radius: 50%;
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  .countdown {
+    font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums;
+  }
+
+  .btn-logout {
+    background: var(--card); border: 1px solid var(--border);
+    color: var(--muted); border-radius: 8px;
+    padding: 6px 12px; font-size: 12px; font-weight: 600;
+    cursor: pointer; font-family: 'Inter', sans-serif;
+    transition: border-color 0.2s, color 0.2s;
+  }
+  .btn-logout:hover { border-color: var(--red); color: var(--red); }
+
+  /* ─── MAIN CONTENT ─── */
+  .main {
+    max-width: 1280px; margin: 0 auto;
+    padding: 28px 24px 48px;
+    display: flex; flex-direction: column; gap: 20px;
+  }
+
+  /* ─── CARDS ─── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 24px;
+    transition: border-color 0.2s;
+  }
+  .card:hover { border-color: var(--border-hover); }
+
+  .card-inner {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+  }
+
+  .card-label {
+    font-size: 11px; font-weight: 700; letter-spacing: 1.5px;
+    text-transform: uppercase; color: var(--muted);
+    margin-bottom: 16px; display: flex; align-items: center; gap: 8px;
+  }
+  .card-label-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--blue); flex-shrink: 0;
+  }
+
+  /* ─── REGIME SUMMARY TOP CARD ─── */
+  .regime-top-hero { display:flex; align-items:center; gap:16px; margin-bottom:16px; flex-wrap:wrap; }
+  .regime-top-badge { display:inline-flex; align-items:center; gap:8px;
+    border-radius:30px; padding:8px 18px; border:1.5px solid; font-size:13px; font-weight:800;
+    letter-spacing:.5px; text-transform:uppercase; }
+  .regime-top-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+  .regime-top-urgency { font-size:10px; font-weight:700; letter-spacing:1.2px;
+    text-transform:uppercase; padding:3px 10px; border-radius:20px; border:1px solid; }
+  .regime-signals-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:14px; }
+  .regime-signal-mini { background:rgba(255,255,255,.03); border:1px solid var(--border);
+    border-radius:10px; padding:10px 12px; }
+  .regime-signal-mini-name { font-size:9px; font-weight:700; text-transform:uppercase;
+    letter-spacing:.8px; color:var(--muted); margin-bottom:4px; }
+  .regime-signal-mini-val { font-size:14px; font-weight:800; font-variant-numeric:tabular-nums; }
+  .regime-signal-mini-trend { font-size:10px; color:var(--muted); margin-top:2px; }
+  .regime-plain-text { font-size:13px; color:#c9d1e0; line-height:1.7; margin-bottom:12px; }
+  .regime-advice-bar { padding:10px 14px; border-radius:10px; border-left:3px solid;
+    background:rgba(255,255,255,.03); }
+  .regime-advice-label { font-size:9px; font-weight:700; text-transform:uppercase;
+    letter-spacing:.8px; margin-bottom:4px; }
+  .regime-advice-text { font-size:12px; color:#b0bec5; line-height:1.6; }
+
+  /* ─── MODULE 1: SIGNAL PRINCIPAL ─── */
+  .signal-hero {
+    display: flex; flex-direction: column; gap: 8px;
+    animation: fadeIn 0.5s ease;
+  }
+  .signal-direction {
+    font-size: 52px; font-weight: 900; letter-spacing: -2px;
+    line-height: 1;
+  }
+  .signal-direction.haussier { color: var(--green); }
+  .signal-direction.baissier { color: var(--red); }
+  .signal-direction.neutre { color: var(--yellow); }
+
+  .signal-conviction {
+    display: flex; align-items: center; gap: 12px;
+    margin-top: 8px;
+  }
+  .conviction-bar-wrap {
+    flex: 1; max-width: 240px;
+    background: var(--card); border-radius: 4px; height: 6px; overflow: hidden;
+  }
+  .conviction-bar {
+    height: 100%; border-radius: 4px;
+    transition: width 1s cubic-bezier(0.4,0,0.2,1);
+  }
+  .conviction-label { font-size: 13px; font-weight: 600; color: var(--muted); }
+  .conviction-pct { font-size: 20px; font-weight: 800; }
+
+  .signal-watch {
+    font-size: 14px; color: rgba(232,234,240,0.7);
+    margin-top: 6px; font-weight: 400;
+    max-width: 600px;
+  }
+
+  .warnings-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .warning-pill {
+    background: rgba(245,166,35,0.12);
+    border: 1px solid rgba(245,166,35,0.25);
+    color: var(--yellow);
+    border-radius: 20px; padding: 4px 12px;
+    font-size: 11px; font-weight: 600;
+  }
+
+  /* ─── MODULE 2: NIVEAUX CLÉS ─── */
+  .levels-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+  }
+  .level-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+    transition: transform 0.2s, border-color 0.2s;
+  }
+  .level-card:hover { transform: translateY(-2px); }
+  .level-card.support { border-top: 2px solid var(--green); }
+  .level-card.pivot { border-top: 2px solid var(--yellow); }
+  .level-card.resistance { border-top: 2px solid var(--red); }
+
+  .level-type { font-size: 10px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 8px; }
+  .level-card.support .level-type { color: var(--green); }
+  .level-card.pivot .level-type { color: var(--yellow); }
+  .level-card.resistance .level-type { color: var(--red); }
+
+  .level-price {
+    font-size: 28px; font-weight: 800; letter-spacing: -1px;
+    font-variant-numeric: tabular-nums;
+    margin-bottom: 4px;
+  }
+  .level-card.support .level-price { color: var(--green); }
+  .level-card.pivot .level-price { color: var(--yellow); }
+  .level-card.resistance .level-price { color: var(--red); }
+
+  .level-tag {
+    font-size: 11px; color: var(--muted); font-weight: 500;
+  }
+
+  .levels-meta {
+    display: flex; gap: 16px; margin-top: 14px; flex-wrap: wrap;
+  }
+  .levels-meta-item {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 16px;
+    font-size: 12px;
+  }
+  .levels-meta-item span:first-child { color: var(--muted); margin-right: 6px; }
+  .levels-meta-item span:last-child { font-weight: 700; font-variant-numeric: tabular-nums; }
+
+  /* ─── MODULE 3: PROBABILITÉS ─── */
+  .prob-grid {
+    display: flex; flex-direction: column; gap: 14px;
+  }
+  .prob-item {}
+  .prob-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 7px;
+  }
+  .prob-label { font-size: 13px; font-weight: 600; }
+  .prob-pct { font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .prob-bar-wrap {
+    height: 8px; background: var(--card); border-radius: 4px; overflow: hidden;
+  }
+  .prob-bar {
+    height: 100%; border-radius: 4px;
+    width: 0%;
+    transition: width 1.2s cubic-bezier(0.4,0,0.2,1);
+  }
+  .prob-bar.bull { background: linear-gradient(90deg, var(--green), rgba(0,212,126,0.6)); }
+  .prob-bar.bear { background: linear-gradient(90deg, var(--red), rgba(255,60,107,0.6)); }
+
+  /* ─── MODULE 4: CONTEXTE ─── */
+  .context-grid {
+    display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;
+  }
+  .context-pill {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .context-pill-label { font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); }
+  .context-pill-value { font-size: 18px; font-weight: 800; }
+  .context-pill-sub { font-size: 11px; color: var(--muted); }
+
+  /* ─── MODULES 3+4 SIDE BY SIDE ─── */
+  .dual-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+
+  /* ─── MODULE 5: NARRATIVE ─── */
+  .narrative-phrase {
+    font-size: 16px; font-weight: 500; line-height: 1.7;
+    color: var(--text); margin-bottom: 16px;
+  }
+  .narrative-banner {
+    background: rgba(245,166,35,0.08);
+    border: 1px solid rgba(245,166,35,0.2);
+    border-radius: 10px; padding: 12px 16px;
+    font-size: 13px; color: var(--yellow); font-weight: 500;
+    margin-bottom: 16px;
+  }
+  .narrative-levels {
+    display: flex; gap: 10px; flex-wrap: wrap;
+  }
+  .level-chip {
+    border-radius: 20px; padding: 4px 14px;
+    font-size: 12px; font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+  .level-chip.up { background: rgba(0,212,126,0.12); border: 1px solid rgba(0,212,126,0.3); color: var(--green); }
+  .level-chip.down { background: rgba(255,60,107,0.12); border: 1px solid rgba(255,60,107,0.3); color: var(--red); }
+
+  /* ─── MODULE 6: MODÈLE ACTIF ─── */
+  .model-row {
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  }
+  .model-name {
+    font-size: 18px; font-weight: 800; color: var(--blue);
+    flex-shrink: 0;
+  }
+  .model-stats {
+    display: flex; gap: 20px; flex-wrap: wrap;
+  }
+  .model-stat { font-size: 13px; }
+  .model-stat span:first-child { color: var(--muted); margin-right: 4px; }
+  .model-stat span:last-child { font-weight: 700; }
+
+  /* ─── BLUR / LOCK OVERLAY ─── */
+  .module-locked {
+    position: relative;
+  }
+  .module-locked .card-content {
+    filter: blur(6px);
+    pointer-events: none;
+    user-select: none;
+  }
+  .lock-overlay {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    z-index: 10; gap: 10px;
+    background: rgba(7,12,24,0.5);
+    border-radius: 16px;
+  }
+  .lock-icon { font-size: 28px; }
+  .lock-text { font-size: 14px; font-weight: 700; color: var(--text); text-align: center; }
+  .lock-sub { font-size: 12px; color: var(--muted); }
+
+  /* ─── SKELETON / ERROR ─── */
+  .skeleton {
+    background: linear-gradient(90deg, var(--card) 25%, #1a2540 50%, var(--card) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+    border-radius: 6px;
+    height: 20px;
+  }
+  .skeleton.large { height: 52px; border-radius: 10px; }
+  .skeleton.sm { height: 12px; }
+
+  .error-state {
+    text-align: center; padding: 24px;
+    color: var(--muted); font-size: 13px;
+  }
+  .error-state .error-icon { font-size: 24px; margin-bottom: 8px; }
+
+  /* ─── RESPONSIVE ─── */
+  @media (max-width: 768px) {
+    .header-logo { font-size: 12px; letter-spacing: 1px; }
+    .header-price { font-size: 18px; }
+    .countdown { display: none; }
+    .main { padding: 16px 12px 48px; gap: 14px; }
+    .card { padding: 16px; }
+    .signal-direction { font-size: 36px; }
+    .levels-grid { grid-template-columns: 1fr; }
+    .dual-grid { grid-template-columns: 1fr; }
+    .context-grid { grid-template-columns: 1fr 1fr; }
+    .level-price { font-size: 22px; }
+    .auth-box { padding: 32px 24px; }
+  }
+
+
+  /* ─── MODULE VEX/CEX ─── */
+  .vex-cex-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;
+  }
+  .vex-cex-box {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px;
+  }
+  .vex-cex-box-label {
+    font-size: 10px; font-weight: 700; letter-spacing: 1px;
+    text-transform: uppercase; color: var(--muted); margin-bottom: 8px;
+  }
+  .vex-cex-value {
+    font-size: 22px; font-weight: 800; margin-bottom: 4px;
+    font-variant-numeric: tabular-nums;
+  }
+  .vex-cex-direction {
+    font-size: 11px; font-weight: 600; letter-spacing: .5px;
+    text-transform: uppercase; margin-bottom: 6px;
+  }
+  .vex-cex-interp {
+    font-size: 11px; color: var(--muted); line-height: 1.5;
+  }
+  .vex-cex-strikes {
+    display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px;
+  }
+  .vex-cex-chip {
+    background: rgba(255,255,255,0.04); border: 1px solid var(--border);
+    border-radius: 6px; padding: 3px 8px;
+    font-size: 10px; font-weight: 600; font-variant-numeric: tabular-nums;
+    color: var(--muted);
+  }
+  .gamma-flip-box {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px; margin-top: 4px;
+  }
+  .gamma-flip-label {
+    font-size: 10px; font-weight: 700; letter-spacing: 1px;
+    text-transform: uppercase; color: var(--muted); margin-bottom: 8px;
+  }
+  .gamma-flip-price {
+    font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums;
+    margin-bottom: 4px;
+  }
+  .gamma-flip-dist {
+    font-size: 12px; font-weight: 600; margin-bottom: 6px;
+  }
+  .gamma-flip-interp {
+    font-size: 11px; color: var(--muted); line-height: 1.55;
+  }
+  /* ─── VEX/CEX HISTORY CHARTS ─── */
+  .vc-history-wrap {
+    margin-top: 18px;
+  }
+  .vc-chart-block {
+    margin-bottom: 14px;
+  }
+  .vc-chart-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 6px;
+  }
+  .vc-chart-label {
+    font-size: 10px; font-weight: 700; letter-spacing: 1px;
+    text-transform: uppercase; color: var(--muted);
+  }
+  .vc-chart-current {
+    font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums;
+  }
+  .vc-canvas-wrap {
+    position: relative; width: 100%; height: 72px;
+    background: rgba(255,255,255,0.02); border-radius: 10px; overflow: hidden;
+  }
+  .vc-canvas-wrap canvas {
+    display: block; width: 100%; height: 100%;
+  }
+  .vc-period-row {
+    display: flex; gap: 6px; justify-content: flex-end; margin-bottom: 10px;
+  }
+  .vc-period-btn {
+    background: transparent; border: 1px solid var(--border);
+    border-radius: 6px; padding: 3px 10px;
+    font-size: 10px; font-weight: 600; color: var(--muted);
+    cursor: pointer; transition: all .15s;
+  }
+  .vc-period-btn.active {
+    background: rgba(168,85,247,.15); border-color: var(--purple);
+    color: var(--purple);
+  }
+
+  /* ─── REGIME DIAGNOSIS ─── */
+  .regime-block {
+    margin-top: 18px;
+    background: rgba(255,255,255,0.02);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 18px 20px;
+  }
+  .regime-header {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 14px;
+  }
+  .regime-badge {
+    display: inline-flex; align-items: center; gap: 7px;
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 30px; padding: 5px 14px;
+    font-size: 11px; font-weight: 700; letter-spacing: .6px;
+    text-transform: uppercase;
+  }
+  .regime-dot {
+    width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  }
+  .regime-title {
+    font-size: 10px; font-weight: 700; letter-spacing: 1px;
+    text-transform: uppercase; color: var(--muted);
+  }
+  .regime-plain {
+    font-size: 13px; color: #c9d1e0; line-height: 1.7; margin-bottom: 12px;
+  }
+  .regime-signals {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+    margin-top: 10px;
+  }
+  .regime-signal-item {
+    background: rgba(255,255,255,0.03); border: 1px solid var(--border);
+    border-radius: 8px; padding: 9px 12px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .regime-signal-name {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .5px; color: var(--muted);
+  }
+  .regime-signal-val {
+    font-size: 11px; font-weight: 700;
+  }
+
+  @media (max-width: 480px) {
+    .header { padding: 0 12px; height: 56px; }
+    .header-price { font-size: 15px; }
+    .btn-logout { display: none; }
+    .context-grid { grid-template-columns: 1fr; }
+  }
+
+  /* ─── PERIOD SELECTOR ─── */
+  .period-selector { display:flex; gap:4px; margin-left:auto; }
+  .period-btn { background:rgba(255,255,255,.06); border:1px solid var(--border); border-radius:8px; padding:3px 10px; font-size:10px; font-weight:700; color:var(--muted); cursor:pointer; letter-spacing:.05em; transition:all .15s; }
+  .period-btn:hover { border-color:rgba(255,255,255,.2); color:var(--text); }
+  .period-btn.active { background:rgba(61,142,255,.15); border-color:rgba(61,142,255,.5); color:#3d8eff; }
+
+  /* ─── SPARKLINE CANVAS ─── */
+  .spark-wrap { position:relative; margin-top:8px; }
+  .spark-wrap canvas { width:100%; height:70px; display:block; }
+  .spark-label { font-size:10px; color:var(--muted); margin-bottom:4px; font-weight:600; letter-spacing:.05em; }
+  .spark-stat { display:flex; justify-content:space-between; align-items:center; margin-top:6px; }
+  .spark-stat-val { font-size:13px; font-weight:700; }
+  .spark-stat-lbl { font-size:10px; color:var(--muted); }
+
+  /* ─── LEVELS ENRICHED ─── */
+  .lvl-section-title { font-size:9px; font-weight:700; letter-spacing:.1em; color:var(--muted); text-transform:uppercase; margin:12px 0 6px; }
+  .lvl-section-title:first-child { margin-top:0; }
+  .levels-grid-2 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; }
+  .level-card-sm { background:rgba(255,255,255,.04); border:1px solid var(--border); border-radius:10px; padding:8px 10px; }
+  .level-card-sm.support { border-color:rgba(0,212,126,.25); }
+  .level-card-sm.resistance { border-color:rgba(255,60,107,.25); }
+  .level-card-sm.pivot { border-color:rgba(245,166,35,.25); }
+  .level-type-sm { font-size:9px; color:var(--muted); font-weight:600; letter-spacing:.06em; text-transform:uppercase; }
+  .level-price-sm { font-size:14px; font-weight:800; margin:2px 0; }
+  .level-price-sm.support { color:var(--green); }
+  .level-price-sm.resistance { color:var(--red); }
+  .level-price-sm.pivot { color:var(--yellow); }
+  .level-tag-sm { font-size:9px; color:var(--muted); }
+  .levels-divider { height:1px; background:var(--border); margin:10px 0; }
+
+  /* ─── VOL WEATHER ─── */
+  .vol-weather { display:flex; align-items:center; gap:14px; padding:10px 0 4px; }
+  .vol-icon { font-size:36px; line-height:1; }
+  .vol-info { flex:1; }
+  .vol-label { font-size:11px; color:var(--muted); font-weight:600; letter-spacing:.05em; text-transform:uppercase; }
+  .vol-value { font-size:28px; font-weight:900; margin:2px 0; }
+  .vol-desc { font-size:11px; color:var(--muted); line-height:1.4; }
+  .vol-term-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(80px,1fr)); gap:6px; margin-top:10px; }
+  .vol-term-item { background:rgba(255,255,255,.04); border:1px solid var(--border); border-radius:8px; padding:6px 8px; text-align:center; }
+  .vol-term-expiry { font-size:9px; color:var(--muted); font-weight:600; }
+  .vol-term-iv { font-size:13px; font-weight:800; margin:2px 0; }
+  .vol-term-oi { font-size:9px; color:var(--muted); }
+
+  /* ─── GEX/DEX PANEL ─── */
+  .gex-dex-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .gex-dex-card { background:rgba(255,255,255,.04); border:1px solid var(--border); border-radius:12px; padding:12px; }
+  .gex-dex-title { font-size:10px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); margin-bottom:4px; }
+  .gex-dex-value { font-size:16px; font-weight:900; margin-bottom:8px; }
+  .gex-dex-impact { font-size:10px; color:var(--muted); line-height:1.4; margin-top:6px; padding-top:6px; border-top:1px solid var(--border); }
+
+  /* ─── MOPI vs BTC chart ─── */
+  .mopi-chart-wrap { position:relative; margin-top:8px; }
+  .mopi-chart-wrap canvas { width:100%; height:160px; display:block; }
+  .mopi-legend { display:flex; gap:16px; margin-top:8px; }
+  .mopi-legend-item { display:flex; align-items:center; gap:6px; font-size:11px; color:var(--muted); }
+  .mopi-legend-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+  .mopi-stats-row { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-top:10px; }
+  .mopi-stat-box { background:rgba(255,255,255,.04); border:1px solid var(--border); border-radius:8px; padding:8px; text-align:center; }
+  .mopi-stat-lbl { font-size:9px; color:var(--muted); font-weight:600; letter-spacing:.05em; text-transform:uppercase; }
+  .mopi-stat-val { font-size:15px; font-weight:800; margin-top:2px; }
+/* ── Stale data indicators (Phase 2) ── */
+[data-stale=1] { opacity: 0.6; position: relative; }
+[data-stale=1]::after {
+  content: 'Données périmées';
+  position: absolute;
+  top: 6px; right: 8px;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .6px;
+  color: #f59e0b;
+  background: #f59e0b18;
+  border: 1px solid #f59e0b44;
+  border-radius: 6px;
+  padding: 2px 6px;
+  pointer-events: none;
+}
+#api-error-banner {
+  display: none;
+  background: #ef444418;
+  border: 1px solid #ef444455;
+  border-radius: 10px;
+  padding: 10px 16px;
+  margin: 0 0 12px;
+  font-size: 12px;
+  color: #fca5a5;
+}
+#api-error-banner.visible { display: block; }
+</style>
+</head>
+<body>
+
+<!-- ─── LOADING ─── -->
+<div id="loading-screen">
+  <div class="loader-ring"></div>
+  <div class="loader-text">Vérification de l'accès…</div>
+</div>
+
+<!-- ─── LOGIN WALL ─── -->
+<div id="login-wall" class="overlay-screen hidden">
+  <div class="auth-box">
+    <div class="auth-logo">
+      <div class="auth-logo-mark">M</div>
+      <div class="auth-title">Mamos Options</div>
+      <div class="auth-subtitle">Réservé aux membres Mamos Elite</div>
+    </div>
+    <div class="auth-error" id="login-error"></div>
+    <button class="btn-patreon" onclick="loginWithPatreon()">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+        <path d="M14.82 2.41C18.78 2.41 22 5.65 22 9.62C22 13.58 18.78 16.8 14.82 16.8C10.85 16.8 7.61 13.58 7.61 9.62C7.61 5.65 10.85 2.41 14.82 2.41ZM2 21.6H5.5V2.41H2V21.6Z" fill="white"/>
+      </svg>
+      Continuer avec Patreon
+    </button>
+    <div class="divider">OU</div>
+    <form id="legacy-login-form" onsubmit="handleLegacyLogin(event)">
+      <div class="form-group">
+        <label class="form-label" for="login-email">Email</label>
+        <input class="form-input" type="email" id="login-email" placeholder="votre@email.com" required autocomplete="email">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="login-password">Mot de passe</label>
+        <input class="form-input" type="password" id="login-password" placeholder="••••••••" required autocomplete="current-password">
+      </div>
+      <button class="btn-login" type="submit" id="login-btn">Se connecter</button>
+    </form>
+    <div class="auth-note">Accès via abonnement Patreon Mamos Elite</div>
+  </div>
+</div>
+
+<!-- ─── UPGRADE WALL ─── -->
+<div id="upgrade-wall" class="overlay-screen hidden">
+  <div class="auth-box" style="text-align:center;">
+    <div class="auth-logo-mark" style="margin:0 auto 16px;">M</div>
+    <div class="auth-title" style="margin-bottom:8px;">Accès restreint</div>
+    <div id="current-plan-display" class="upgrade-plan-pill">Plan: Mamos Basic</div>
+    <p style="font-size:14px;color:var(--muted);line-height:1.7;margin-bottom:24px;margin-top:8px;">
+      Mamos Options est exclusivement disponible pour les membres <strong style="color:var(--purple);">Mamos Elite</strong>.<br>
+      Passe au niveau Elite pour accéder à l'analyse complète des options BTC en temps réel.
+    </p>
+    <a class="btn-upgrade" href="https://www.patreon.com/mamoscrypto" target="_blank">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+        <path d="M14.82 2.41C18.78 2.41 22 5.65 22 9.62C22 13.58 18.78 16.8 14.82 16.8C10.85 16.8 7.61 13.58 7.61 9.62C7.61 5.65 10.85 2.41 14.82 2.41ZM2 21.6H5.5V2.41H2V21.6Z" fill="white"/>
+      </svg>
+      Passer à Mamos Elite
+    </a>
+    <br><br>
+    <button class="btn-logout" style="margin:0 auto;" onclick="logout()">Se déconnecter</button>
+  </div>
+</div>
+
+<!-- ─── DASHBOARD ─── -->
+<div id="dashboard">
+  <div id="api-error-banner"></div>
+
+  <!-- HEADER -->
+  <header class="header">
+    <div class="header-logo">MAMOS OPTIONS</div>
+    <div class="header-price neutral" id="btc-price">—</div>
+    <div class="header-right">
+      <div class="live-indicator">
+        <div class="live-dot"></div>
+        <span>LIVE</span>
+      </div>
+      <div class="countdown" id="refresh-countdown">—</div>
+      <button class="btn-logout" onclick="logout()">Déconnexion</button>
+    </div>
+  </header>
+
+  <!-- MAIN -->
+  <main class="main">
+
+    <!-- CARD RÉGIME — SYNTHÈSE DESK OPTIONS -->
+    <div class="card" id="regime-summary-card">
+      <div class="card-label">
+        <div class="card-label-dot" id="regime-dot-indicator" style="background:#94a3b8"></div>
+        RÉGIME DE MARCHÉ — SYNTHÈSE DESK OPTIONS
+      </div>
+      <div id="regime-summary-content">
+        <div class="skeleton" style="height:120px;border-radius:12px;"></div>
+      </div>
+    </div>
+
+    <!-- MODULE 1: SIGNAL PRINCIPAL -->
+    <div class="card" id="m1-signal">
+      <div class="card-label"><div class="card-label-dot" style="background:var(--blue)"></div>SIGNAL PRINCIPAL</div>
+      <div id="m1-content">
+        <div class="skeleton large" style="width:280px;margin-bottom:12px;"></div>
+        <div class="skeleton" style="width:200px;"></div>
+      </div>
+    </div>
+
+    <!-- MODULE 2: NIVEAUX CLÉS (enrichi) -->
+    <div class="card" id="m2-levels">
+      <div class="card-label"><div class="card-label-dot" style="background:var(--yellow)"></div>NIVEAUX CLÉS</div>
+      <div id="m2-content">
+        <div class="skeleton" style="height:180px;border-radius:12px;"></div>
+      </div>
+    </div>
+
+    <!-- MODULES 3 + 4 side by side -->
+    <div class="dual-grid">
+      <!-- MODULE 3: PROBABILITÉS -->
+      <div class="card" id="m3-prob">
+        <div class="card-label"><div class="card-label-dot" style="background:var(--green)"></div>PROBABILITÉS</div>
+        <div id="m3-content">
+          <div class="skeleton" style="height:120px;border-radius:10px;"></div>
+        </div>
+      </div>
+
+      <!-- MODULE 4: CONTEXTE -->
+      <div class="card" id="m4-context">
+        <div class="card-label"><div class="card-label-dot" style="background:var(--purple)"></div>CONTEXTE</div>
+        <div id="m4-content">
+          <div class="skeleton" style="height:120px;border-radius:10px;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODULE 7: VOL WEATHER -->
+    <div class="card" id="m7-vol">
+      <div class="card-label"><div class="card-label-dot" style="background:var(--blue)"></div>MÉTÉO VOLATILITÉ</div>
+      <div id="m7-content">
+        <div class="skeleton" style="height:100px;border-radius:12px;"></div>
+      </div>
+    </div>
+
+    <!-- MODULE 8: GEX + DEX EVOLUTION -->
+    <div class="card" id="m8-gexdex">
+      <div class="card-label"><div class="card-label-dot" style="background:var(--purple)"></div>GEX &amp; DEX — ÉVOLUTION
+        <div class="period-selector">
+          <button class="period-btn active" onclick="setPeriod('7d')">7J</button>
+          <button class="period-btn" onclick="setPeriod('14d')">14J</button>
+          <button class="period-btn" onclick="setPeriod('30d')">30J</button>
+        </div>
+      </div>
+      <div id="m8-content">
+        <div class="skeleton" style="height:180px;border-radius:12px;"></div>
+      </div>
+    </div>
+
+    <!-- MODULE 9: MOPI vs BTC -->
+    <div class="card" id="m9-mopi">
+      <div class="card-label"><div class="card-label-dot" style="background:var(--green)"></div>MOPI vs BTC
+        <div class="period-selector">
+          <button class="period-btn active" onclick="setPeriod('7d')">7J</button>
+          <button class="period-btn" onclick="setPeriod('14d')">14J</button>
+          <button class="period-btn" onclick="setPeriod('30d')">30J</button>
+        </div>
+      </div>
+      <div id="m9-content">
+        <div class="skeleton" style="height:200px;border-radius:12px;"></div>
+      </div>
+    </div>
+
+    <!-- MODULE 5: NARRATIVE IA -->
+    <div class="card" id="m5-narrative">
+      <div class="card-label"><div class="card-label-dot" style="background:var(--purple)"></div>NARRATIVE IA</div>
+      <div id="m5-content">
+        <div class="skeleton" style="margin-bottom:10px;"></div>
+        <div class="skeleton" style="width:80%;margin-bottom:10px;"></div>
+        <div class="skeleton sm" style="width:60%;"></div>
+      </div>
+    </div>
+
+    <!-- MODULE 6: MODÈLE ACTIF -->
+    <div class="card" id="m6-model">
+      <div class="card-label"><div class="card-label-dot" style="background:var(--blue)"></div>MODÈLE ACTIF</div>
+      <div id="m6-content">
+        <div class="skeleton" style="width:200px;height:28px;border-radius:8px;"></div>
+      </div>
+    </div>
+
+
+    <!-- MODULE VEX/CEX: VANNA & CHARM EXPOSURE -->
+    <div class="card" id="m-vex-cex">
+      <div class="card-label"><div class="card-label-dot" style="background:var(--purple)"></div>VEX / CEX — VANNA &amp; CHARM</div>
+      <div id="vex-cex-content">
+        <div class="skeleton" style="width:100%;height:80px;border-radius:12px;margin-bottom:12px;"></div>
+        <div class="skeleton" style="width:100%;height:80px;border-radius:12px;margin-bottom:12px;"></div>
+        <div class="skeleton" style="width:70%;height:40px;border-radius:10px;"></div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════
+//  CONFIG
+// ══════════════════════════════════════════════════
+const API_BASE = '';  // same origin
+const REFRESH_INTERVAL = 60; // seconds
+const ELITE_PLAN = 'Mamos Elite';
+
+// ══════════════════════════════════════════════════
+//  AUTH SYSTEM
+// ══════════════════════════════════════════════════
+let authState = { authenticated: false, isElite: false, plan: null, method: null };
+let refreshTimer = null;
+let countdownInterval = null;
+let secondsLeft = REFRESH_INTERVAL;
+
+async function checkAuth() {
+  // 1. Check mamos_trading_session (set by trading.mamoscrypto.com after Patreon OAuth)
+  try {
+    const sessionRaw = localStorage.getItem('mamos_trading_session');
+    if (sessionRaw) {
+      const session = JSON.parse(sessionRaw);
+      if (session && session.plan && session.premium_active !== false) {
+        authState = {
+          authenticated: true,
+          isElite: session.plan === ELITE_PLAN,
+          plan: session.plan,
+          method: 'patreon'
+        };
+        return authState;
+      }
+    }
+  } catch(e) {}
+
+  // 2. Check legacy JWT token
+  try {
+    const legacyToken = localStorage.getItem('mamos_auth_v1');
+    if (legacyToken) {
+      const resp = await fetch('/api/auth/verify', {
+        headers: { 'Authorization': 'Bearer ' + legacyToken }
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        authState = {
+          authenticated: true,
+          isElite: data.plan === ELITE_PLAN,
+          plan: data.plan || 'Mamos Basic',
+          method: 'legacy'
+        };
+        return authState;
+      }
+    }
+  } catch(e) {}
+
+  authState = { authenticated: false, isElite: false, plan: null, method: null };
+  return authState;
+}
+
+function loginWithPatreon() {
+  window.location.href = 'https://ncltwnrrzrqtxgxchnaf.supabase.co/functions/v1/patreon-oauth/start?app_url=' + encodeURIComponent('https://options-analyzer.mamoscrypto.com');
+}
+
+async function handleLegacyLogin(e) {
+  e.preventDefault();
+  const btn = document.getElementById('login-btn');
+  const errEl = document.getElementById('login-error');
+  const email = document.getElementById('login-email').value;
+  const password = document.getElementById('login-password').value;
+
+  btn.textContent = 'Connexion…';
+  btn.disabled = true;
+  errEl.classList.remove('visible');
+
+  try {
+    const resp = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    });
+    const data = await resp.json();
+    if (resp.ok && data.token) {
+      localStorage.setItem('mamos_auth_v1', data.token);
+      await initApp();
+    } else {
+      errEl.textContent = data.error || 'Identifiants incorrects';
+      errEl.classList.add('visible');
+    }
+  } catch(e) {
+    errEl.textContent = 'Erreur de connexion au serveur';
+    errEl.classList.add('visible');
+  }
+
+  btn.textContent = 'Se connecter';
+  btn.disabled = false;
+}
+
+function logout() {
+  localStorage.removeItem('mamos_trading_session');
+  localStorage.removeItem('mamos_auth_v1');
+  authState = { authenticated: false, isElite: false, plan: null, method: null };
+  if (countdownInterval) clearInterval(countdownInterval);
+  if (refreshTimer) clearInterval(refreshTimer);
+  showScreen('login');
+}
+
+function showScreen(screen) {
+  document.getElementById('loading-screen').classList.add('hidden');
+  document.getElementById('login-wall').classList.add('hidden');
+  document.getElementById('upgrade-wall').classList.add('hidden');
+  document.getElementById('dashboard').classList.remove('visible');
+
+  if (screen === 'login') {
+    document.getElementById('login-wall').classList.remove('hidden');
+  } else if (screen === 'upgrade') {
+    document.getElementById('current-plan-display').textContent = 'Plan: ' + (authState.plan || 'Mamos Basic');
+    document.getElementById('upgrade-wall').classList.remove('hidden');
+  } else if (screen === 'dashboard') {
+    document.getElementById('dashboard').classList.add('visible');
+  }
+}
+
+async function initApp() {
+  // Handle Patreon OAuth callback — hash can contain:
+  // 1. #mamos_session=<base64> (from trading.mamoscrypto.com redirect, legacy)
+  // 2. #access_token=<jwt>&... (from Supabase magic link after direct Patreon OAuth)
+  try {
+    const hash = window.location.hash;
+
+    if (hash.includes('mamos_session=')) {
+      const match = hash.match(/mamos_session=([^&]+)/);
+      if (match) {
+        const decoded = JSON.parse(atob(match[1]));
+        if (decoded && decoded.plan) {
+          localStorage.setItem('mamos_trading_session', JSON.stringify({
+            plan: decoded.plan,
+            email: decoded.email || '',
+            premium_active: true,
+            ts: decoded.ts || Date.now()
+          }));
+        }
+      }
+      history.replaceState(null, '', window.location.pathname + window.location.search);
+
+    } else if (hash.includes('access_token=')) {
+      // Direct Patreon OAuth callback — extract JWT and fetch user metadata
+      const params = new URLSearchParams(hash.slice(1));
+      const accessToken = params.get('access_token');
+      if (accessToken) {
+        // Fetch user info from Supabase using the access token
+        const resp = await fetch('https://ncltwnrrzrqtxgxchnaf.supabase.co/auth/v1/user', {
+          headers: {
+            'Authorization': 'Bearer ' + accessToken,
+            'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5jbHR3bnJyenJxdHhneGNobmFmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYwNjY4OTIsImV4cCI6MjA5MTY0Mjg5Mn0.JShY8xzrBpErlfrdXt2PuuByZ1Zy9oaKNU6IvAhCArY'
+          }
+        });
+        if (resp.ok) {
+          const user = await resp.json();
+          const plan = user.user_metadata?.plan ?? '';
+          const email = user.email ?? '';
+          if (plan) {
+            localStorage.setItem('mamos_trading_session', JSON.stringify({
+              plan,
+              email,
+              premium_active: user.user_metadata?.premium_active === true,
+              ts: Date.now()
+            }));
+          }
+        }
+      }
+      history.replaceState(null, '', window.location.pathname + window.location.search);
+    }
+  } catch(e) {}
+
+  document.getElementById('loading-screen').classList.remove('hidden');
+  document.getElementById('login-wall').classList.add('hidden');
+  document.getElementById('upgrade-wall').classList.add('hidden');
+  document.getElementById('dashboard').classList.remove('visible');
+
+  const auth = await checkAuth();
+  document.getElementById('loading-screen').classList.add('hidden');
+
+  if (!auth.authenticated) {
+    showScreen('login');
+    return;
+  }
+  if (!auth.isElite) {
+    showScreen('upgrade');
+    // Apply blur to legacy free users who sneak past
+    applyLockToModules();
+    return;
+  }
+
+  showScreen('dashboard');
+  await loadAllData();
+  startRefreshLoop();
+}
+
+// ══════════════════════════════════════════════════
+//  LOCK OVERLAY (for non-Elite legacy users)
+// ══════════════════════════════════════════════════
+function applyLockToModules() {
+  const ids = ['m2-levels','m3-prob','m4-context','m5-narrative','m6-model'];
+  ids.forEach(id => {
+    const card = document.getElementById(id);
+    if (!card) return;
+    card.classList.add('module-locked');
+    const content = card.querySelector('[id$="-content"]');
+    if (content) content.classList.add('card-content');
+    if (!card.querySelector('.lock-overlay')) {
+      const overlay = document.createElement('div');
+      overlay.className = 'lock-overlay';
+      overlay.innerHTML = `
+        <div class="lock-icon">🔒</div>
+        <div class="lock-text">Mamos Elite requis</div>
+        <div class="lock-sub">Passe à Elite sur Patreon</div>
+      `;
+      card.appendChild(overlay);
+    }
+  });
+}
+
+// ══════════════════════════════════════════════════
+//  API FETCH
+// ══════════════════════════════════════════════════
+function getAuthHeaders() {
+  const headers = { 'Content-Type': 'application/json' };
+  const legacyToken = localStorage.getItem('mamos_auth_v1');
+  if (legacyToken) headers['Authorization'] = 'Bearer ' + legacyToken;
+  return headers;
+}
+
+let _fetchSeq = 0;
+
+async function apiFetch(endpoint, signal) {
+  try {
+    const resp = await fetch(API_BASE + endpoint, { headers: getAuthHeaders(), signal });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    return await resp.json();
+  } catch(e) {
+    if (e.name === 'AbortError') return null;
+    return null;
+  }
+}
+
+// ══════════════════════════════════════════════════
+//  FORMATTERS
+// ══════════════════════════════════════════════════
+function fmtPrice(val, decimals) {
+  if (val == null) return '—';
+  const n = Number(val);
+  const d = decimals != null ? decimals : n >= 10000 ? 0 : n >= 1000 ? 1 : 2;
+  return '$' + n.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+}
+function fmtPct(val) {
+  if (val == null) return '—';
+  return Math.round(val) + '%';
+}
+
+function formatModelName(slug) {
+  if (!slug) return '—';
+  return slug
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, c => c.toUpperCase());
+}
+
+// ══════════════════════════════════════════════════
+//  BTC PRICE
+// ══════════════════════════════════════════════════
+let lastBtcPrice = null;
+async function loadBtcPrice() {
+  try {
+    const resp = await fetch('https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT');
+    const data = await resp.json();
+    const price = parseFloat(data.price);
+    const el = document.getElementById('btc-price');
+    el.textContent = fmtPrice(price);
+    if (lastBtcPrice !== null) {
+      el.className = 'header-price ' + (price > lastBtcPrice ? 'up' : price < lastBtcPrice ? 'down' : 'neutral');
+    }
+    lastBtcPrice = price;
+  } catch(e) {
+    document.getElementById('btc-price').textContent = '—';
+  }
+}
+
+// ══════════════════════════════════════════════════
+//  MODULE 1: SIGNAL PRINCIPAL
+// ══════════════════════════════════════════════════
+async function loadSignal(signal) {
+  const data = await apiFetch('/api/market_decision', signal);
+  const el = document.getElementById('m1-content');
+  if (!data) {
+    el.innerHTML = `<div class="error-state"><div class="error-icon">⚠</div>Données indisponibles</div>`;
+    return;
+  }
+
+  const dir = (data.directional?.direction || data.direction || 'NEUTRE').toUpperCase();
+  const conf = data.directional?.confidence || data.confidence || 0;
+  const watch = data.watch_message || data.message || '';
+  const warnings = data.warnings || [];
+
+  let dirClass = 'neutre', dirLabel = 'NEUTRE';
+  if (dir.includes('BULL') || dir.includes('HAUSS')) { dirClass = 'haussier'; dirLabel = 'HAUSSIER'; }
+  else if (dir.includes('BEAR') || dir.includes('BAISS')) { dirClass = 'baissier'; dirLabel = 'BAISSIER'; }
+  else if (dir === 'NEUTRE' || dir === 'NEUTRAL') { dirClass = 'neutre'; dirLabel = 'NEUTRE'; }
+
+  const convColor = dirClass === 'haussier' ? 'var(--green)' : dirClass === 'baissier' ? 'var(--red)' : 'var(--yellow)';
+
+  let warningHTML = '';
+  if (warnings.length > 0) {
+    warningHTML = '<div class="warnings-row">' +
+      warnings.map(w => `<span class="warning-pill">${w}</span>`).join('') +
+      '</div>';
+  }
+
+  el.innerHTML = `
+    <div class="signal-hero">
+      <div class="signal-direction ${dirClass}">${dirLabel}</div>
+      <div class="signal-conviction">
+        <div class="conviction-pct" style="color:${convColor}">${fmtPct(conf)}</div>
+        <div class="conviction-label">conviction</div>
+        <div class="conviction-bar-wrap">
+          <div class="conviction-bar" id="conv-bar" style="background:${convColor};width:0%"></div>
+        </div>
+      </div>
+      ${watch ? `<div class="signal-watch">${watch}</div>` : ''}
+      ${warningHTML}
+    </div>
+  `;
+
+  setTimeout(() => {
+    const bar = document.getElementById('conv-bar');
+    if (bar) bar.style.width = Math.min(conf, 100) + '%';
+  }, 100);
+
+  return data;
+}
+
+// ══════════════════════════════════════════════════
+//  MODULE 2: NIVEAUX CLÉS
+// ══════════════════════════════════════════════════
+async function loadLevels(decisionData, signal) {
+  const wallsData = await apiFetch('/api/options_walls', signal);
+  const el = document.getElementById('m2-content');
+
+  const walls = wallsData || {};
+
+  // Options walls — sort by strike, split supports/resistances
+  const price = walls.btc_price || 0;
+  const allWalls = (walls.walls || []).slice().sort((a,b) => a.strike - b.strike);
+  const supports = allWalls.filter(w => w.strike < price).slice(-3).reverse();
+  const resistances = allWalls.filter(w => w.strike > price).slice(0, 3);
+
+  const wallCard = (w, side) => {
+    const cls = side === 'support' ? 'support' : 'resistance';
+    const tag = w.tag || '';
+    const tagColor = tag === 'ACTIONABLE' ? 'var(--green)' : tag === 'STRUCTURAL' ? 'var(--yellow)' : 'var(--muted)';
+    return `<div class="level-card-sm ${cls}">
+      <div class="level-type-sm">${side === 'support' ? 'Support' : 'Résistance'}</div>
+      <div class="level-price-sm ${cls}">${fmtPrice(w.strike)}</div>
+      <div class="level-tag-sm" style="color:${tagColor}">${w.type?.replace('_',' ')||''} · ${Math.round(w.total_oi||0).toLocaleString()} BTC</div>
+    </div>`;
+  };
+
+  el.innerHTML = `
+    <div class="lvl-section-title">Murs Options (actifs)</div>
+    <div class="levels-grid-2">
+      ${resistances.map(w => wallCard(w, 'resistance')).join('')}
+      ${supports.map(w => wallCard(w, 'support')).join('')}
+    </div>
+  `;
+}
+
+// ══════════════════════════════════════════════════
+//  MODULE 3: PROBABILITÉS
+// ══════════════════════════════════════════════════
+async function loadProbabilities(signal) {
+  const data = await apiFetch('/api/probability_engine', signal);
+  const el = document.getElementById('m3-content');
+
+  if (!data) {
+    el.innerHTML = `<div class="error-state"><div class="error-icon">⚠</div>Données indisponibles</div>`;
+    return;
+  }
+
+  const scenarios = [
+    { label: 'Hausse 24h', key: 'bull_24h', type: 'bull' },
+    { label: 'Baisse 24h', key: 'bear_24h', type: 'bear' },
+    { label: 'Hausse 72h', key: 'bull_72h', type: 'bull' },
+    { label: 'Baisse 72h', key: 'bear_72h', type: 'bear' },
+  ];
+
+  const pctColor = (type) => type === 'bull' ? 'var(--green)' : 'var(--red)';
+
+  let html = '<div class="prob-grid">';
+  scenarios.forEach((s, i) => {
+    const val = data[s.key]?.probability ?? data[s.key] ?? 0;
+    html += `
+      <div class="prob-item">
+        <div class="prob-header">
+          <span class="prob-label">${s.label}</span>
+          <span class="prob-pct" style="color:${pctColor(s.type)}">${fmtPct(val)}</span>
+        </div>
+        <div class="prob-bar-wrap">
+          <div class="prob-bar ${s.type}" id="pb-${i}" style="width:0%"></div>
+        </div>
+      </div>
+    `;
+  });
+  html += '</div>';
+  el.innerHTML = html;
+
+  setTimeout(() => {
+    scenarios.forEach((s, i) => {
+      const val = data[s.key]?.probability ?? data[s.key] ?? 0;
+      const bar = document.getElementById('pb-' + i);
+      if (bar) bar.style.width = Math.min(val, 100) + '%';
+    });
+  }, 150);
+}
+
+// ══════════════════════════════════════════════════
+//  MODULE 4: CONTEXTE
+// ══════════════════════════════════════════════════
+async function loadContext(signal) {
+  const [dashData, dealerData] = await Promise.all([
+    apiFetch('/api/dashboard', signal),
+    apiFetch('/api/dealer_pressure', signal)
+  ]);
+  const el = document.getElementById('m4-content');
+
+  const dash = dashData || {};
+  const dealer = dealerData || {};
+
+  const volState = dash.weather_state || dash.volatility_state || '—';
+  const dealerDir = dealer.direction || '—';
+  const mopi = dash.mopi_score ?? dealer.mopi_score ?? null;
+  const gex = dash.gex_regime || dealer.gex_regime || '—';
+
+  // Weather state color
+  const volColors = {
+    'CALME': 'var(--green)',
+    'TRANSITION': 'var(--yellow)',
+    'EXPLOSIVE': 'var(--red)',
+    'CHAOS': 'var(--red)',
+  };
+  const volColor = volColors[volState] || 'var(--text)';
+
+  // Dealer direction
+  let dealerLabel = dealerDir;
+  let dealerColor = 'var(--text)';
+  if (dealerDir.includes('BEARISH') || dealerDir.includes('BEAR')) {
+    dealerLabel = 'Résistance'; dealerColor = 'var(--red)';
+  } else if (dealerDir.includes('BULLISH') || dealerDir.includes('BULL')) {
+    dealerLabel = 'Support'; dealerColor = 'var(--green)';
+  }
+
+  // MOPI color
+  let mopiColor = 'var(--text)';
+  if (mopi !== null) {
+    if (mopi >= 65) mopiColor = 'var(--green)';
+    else if (mopi <= 35) mopiColor = 'var(--red)';
+    else mopiColor = 'var(--yellow)';
+  }
+
+  // GEX color
+  const gexColors = { 'AMPLIFICATEUR': 'var(--red)', 'ABSORBEUR': 'var(--green)' };
+  const gexColor = gexColors[gex] || 'var(--text)';
+
+  el.innerHTML = `
+    <div class="context-grid">
+      <div class="context-pill">
+        <div class="context-pill-label">Volatilité</div>
+        <div class="context-pill-value" style="color:${volColor}">${volState}</div>
+        <div class="context-pill-sub">Régime de marché</div>
+      </div>
+      <div class="context-pill">
+        <div class="context-pill-label">Dealer</div>
+        <div class="context-pill-value" style="color:${dealerColor}">${dealerLabel}</div>
+        <div class="context-pill-sub">Flux dealers</div>
+      </div>
+      <div class="context-pill">
+        <div class="context-pill-label">MOPI</div>
+        <div class="context-pill-value" style="color:${mopiColor}">${mopi !== null ? Math.round(mopi) + '/100' : '—'}</div>
+        <div class="context-pill-sub">Market Options Pressure</div>
+      </div>
+      <div class="context-pill">
+        <div class="context-pill-label">GEX</div>
+        <div class="context-pill-value" style="color:${gexColor}">${gex}</div>
+        <div class="context-pill-sub">Gamma Exposure</div>
+      </div>
+    </div>
+  `;
+}
+
+// ══════════════════════════════════════════════════
+//  MODULE 5: NARRATIVE IA
+// ══════════════════════════════════════════════════
+async function loadNarrative(signal) {
+  const data = await apiFetch('/api/narrative', signal);
+  const el = document.getElementById('m5-content');
+
+  if (!data) {
+    el.innerHTML = `<div class="error-state"><div class="error-icon">⚠</div>Données indisponibles</div>`;
+    return;
+  }
+
+  const phrase = data.phrase_synthese || data.synthesis || data.text || '—';
+  const banner = data.banner_message || data.banner || null;
+  const niveauHaut = data.niveau_haut || data.high_level || null;
+  const niveauBas = data.niveau_bas || data.low_level || null;
+
+  el.innerHTML = `
+    ${phrase ? `<div class="narrative-phrase">${phrase}</div>` : ''}
+    ${banner ? `<div class="narrative-banner">${banner}</div>` : ''}
+    ${(niveauHaut || niveauBas) ? `
+    <div class="narrative-levels">
+      ${niveauHaut ? `<span class="level-chip up">↑ ${fmtPrice(niveauHaut)}</span>` : ''}
+      ${niveauBas ? `<span class="level-chip down">↓ ${fmtPrice(niveauBas)}</span>` : ''}
+    </div>` : ''}
+  `;
+}
+
+// ══════════════════════════════════════════════════
+//  MODULE 6: MODÈLE ACTIF
+// ══════════════════════════════════════════════════
+async function loadModel(signal) {
+  const data = await apiFetch('/api/model_arena/leaderboard', signal);
+  const el = document.getElementById('m6-content');
+
+  if (!data) {
+    el.innerHTML = `<div class="error-state"><div class="error-icon">⚠</div>Données indisponibles</div>`;
+    return;
+  }
+
+  // Try to get the principal engine
+  let model = null;
+  if (Array.isArray(data)) {
+    model = data[0];
+  } else if (data.principal) {
+    model = data.principal;
+  } else if (data.leaderboard && Array.isArray(data.leaderboard)) {
+    model = data.leaderboard[0];
+  } else {
+    model = data;
+  }
+
+  const name = formatModelName(model?.model_name || model?.name || model?.engine || 'Unknown');
+  const winRate = model?.win_rate ?? model?.winrate ?? null;
+  const predictions = model?.total_predictions ?? model?.predictions ?? null;
+  const days = model?.days_of_data ?? model?.days ?? null;
+
+  el.innerHTML = `
+    <div class="model-row">
+      <div class="model-name">${name}</div>
+      <div class="model-stats">
+        ${winRate !== null ? `<div class="model-stat"><span>Win Rate</span><span style="color:var(--green)">${fmtPct(winRate)}</span></div>` : ''}
+        ${predictions !== null ? `<div class="model-stat"><span>Prédictions</span><span>${Number(predictions).toLocaleString()}</span></div>` : ''}
+        ${days !== null ? `<div class="model-stat"><span>Données</span><span>${days}j</span></div>` : ''}
+      </div>
+    </div>
+  `;
+}
+
+// ══════════════════════════════════════════════════
+//  LOAD ALL DATA
+// ══════════════════════════════════════════════════
+// ══════════════════════════════════════════════════
+//  MODULE 7: MÉTÉO VOLATILITÉ
+// ══════════════════════════════════════════════════
+async function loadVolWeather(signal) {
+  const data = await apiFetch('/api/vol_structure', signal);
+  const el = document.getElementById('m7-content');
+  if (!data?.data?.length) { el.innerHTML = '<div class="error-state"><div class="error-icon">⚠</div>Données indisponibles</div>'; return; }
+
+  const terms = data.data.slice(0, 8);
+  const nearIV = terms[0]?.iv || 0;
+  const icon = nearIV > 80 ? '⛈' : nearIV > 60 ? '🌩' : nearIV > 45 ? '🌧' : nearIV > 30 ? '⛅' : '☀️';
+  const label = nearIV > 80 ? 'Volatilité Extrême' : nearIV > 60 ? 'Volatilité Haute' : nearIV > 45 ? 'Volatilité Élevée' : nearIV > 30 ? 'Volatilité Modérée' : 'Volatilité Basse';
+  const desc = nearIV > 60 ? 'Marché sous tension — spreads élargis, prudence sur les positions directionnelles.'
+             : nearIV > 40 ? 'Volatilité présente — opportunités options mais gestion du risque requise.'
+             : 'Marché calme — coût des options faible, favorable aux achats de protection.';
+
+  const termCards = terms.map(t => `
+    <div class="vol-term-item">
+      <div class="vol-term-expiry">${t.expiry}</div>
+      <div class="vol-term-iv" style="color:${t.iv > 60 ? 'var(--red)' : t.iv > 40 ? 'var(--yellow)' : 'var(--green)'}">${t.iv?.toFixed(1)}%</div>
+      <div class="vol-term-oi">${t.oi_pct?.toFixed(1)}% OI</div>
+    </div>`).join('');
+
+  el.innerHTML = `
+    <div class="vol-weather">
+      <div class="vol-icon">${icon}</div>
+      <div class="vol-info">
+        <div class="vol-label">IV Term Structure</div>
+        <div class="vol-value" style="color:${nearIV > 60 ? 'var(--red)' : nearIV > 40 ? 'var(--yellow)' : 'var(--green)'}">${nearIV?.toFixed(1)}%</div>
+        <div class="vol-desc">${label} — ${desc}</div>
+      </div>
+    </div>
+    <div class="vol-term-grid">${termCards}</div>
+  `;
+}
+
+// ══════════════════════════════════════════════════
+//  PERIOD SELECTOR
+// ══════════════════════════════════════════════════
+let currentPeriod = '7d';
+
+function setPeriod(p) {
+  currentPeriod = p;
+  document.querySelectorAll('.period-btn').forEach(btn => {
+    const txt = btn.textContent.toLowerCase().replace('j', 'd');
+    btn.classList.toggle('active', txt === p);
+  });
+  loadGexDex();
+  loadMopiVsBtc();
+}
+
+// ══════════════════════════════════════════════════
+//  MODULE 8: GEX & DEX ÉVOLUTION
+// ══════════════════════════════════════════════════
+function drawSparkline(canvasId, values, color, fillColor) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas || !values?.length) return;
+  const dpr = window.devicePixelRatio || 1;
+  const W = canvas.offsetWidth || canvas.parentElement?.offsetWidth || 300;
+  const H = 70;
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
+  const pad = 4;
+
+  const x = (i) => pad + (i / (values.length - 1)) * (W - pad * 2);
+  const y = (v) => H - pad - ((v - min) / range) * (H - pad * 2);
+
+  ctx.beginPath();
+  ctx.moveTo(x(0), y(values[0]));
+  for (let i = 1; i < values.length; i++) ctx.lineTo(x(i), y(values[i]));
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Fill
+  ctx.lineTo(x(values.length - 1), H);
+  ctx.lineTo(x(0), H);
+  ctx.closePath();
+  ctx.fillStyle = fillColor;
+  ctx.fill();
+
+  // Zero line if values cross zero
+  if (min < 0 && max > 0) {
+    const yz = y(0);
+    ctx.beginPath();
+    ctx.moveTo(pad, yz);
+    ctx.lineTo(W - pad, yz);
+    ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+}
+
+async function loadGexDex(signal) {
+  const data = await apiFetch('/api/mopi_vs_btc?period=' + currentPeriod, signal);
+  const el = document.getElementById('m8-content');
+  if (!data?.gex?.length) { el.innerHTML = '<div class="error-state"><div class="error-icon">⚠</div>Données indisponibles</div>'; return; }
+
+  const gexVals = data.gex.filter(v => v != null);
+  const dexVals = data.dex.filter(v => v != null);
+  const lastGex = gexVals[gexVals.length - 1] || 0;
+  const lastDex = dexVals[dexVals.length - 1] || 0;
+  const prevGex = gexVals[gexVals.length - 2] || lastGex;
+  const prevDex = dexVals[dexVals.length - 2] || lastDex;
+  const gexDir = lastGex > prevGex ? '▲' : '▼';
+  const dexDir = lastDex > prevDex ? '▲' : '▼';
+  const gexColor = lastGex < 0 ? 'var(--red)' : 'var(--green)';
+  const dexColor = lastDex > 0 ? 'var(--red)' : 'var(--green)';
+
+  const fmtBig = (v) => {
+    const abs = Math.abs(v);
+    if (abs >= 1e9) return (v/1e9).toFixed(2) + 'B';
+    if (abs >= 1e6) return (v/1e6).toFixed(1) + 'M';
+    return v?.toFixed(0);
+  };
+
+  const gexImpact = lastGex < 0
+    ? 'GEX négatif → dealers long gamma → amplifient les mouvements (market maker fuel)'
+    : 'GEX positif → dealers short gamma → absorbent les mouvements (pin effect)';
+  const dexImpact = lastDex > 0
+    ? 'DEX positif → dealers couvrent en vendant BTC si le prix monte (résistance)'
+    : 'DEX négatif → dealers achètent BTC si le prix baisse (support)';
+
+  el.innerHTML = `
+    <div class="gex-dex-grid">
+      <div class="gex-dex-card">
+        <div class="gex-dex-title">GEX (Gamma)</div>
+        <div class="gex-dex-value" style="color:${gexColor}">${gexDir} ${fmtBig(lastGex)}</div>
+        <div class="spark-wrap"><canvas id="spark-gex"></canvas></div>
+        <div class="gex-dex-impact">${gexImpact}</div>
+      </div>
+      <div class="gex-dex-card">
+        <div class="gex-dex-title">DEX (Delta)</div>
+        <div class="gex-dex-value" style="color:${dexColor}">${dexDir} ${fmtBig(lastDex)}</div>
+        <div class="spark-wrap"><canvas id="spark-dex"></canvas></div>
+        <div class="gex-dex-impact">${dexImpact}</div>
+      </div>
+    </div>
+  `;
+
+  requestAnimationFrame(() => {
+    drawSparkline('spark-gex', gexVals, lastGex < 0 ? '#ff3c6b' : '#00d47e', lastGex < 0 ? 'rgba(255,60,107,0.1)' : 'rgba(0,212,126,0.1)');
+    drawSparkline('spark-dex', dexVals, lastDex > 0 ? '#ff3c6b' : '#00d47e', lastDex > 0 ? 'rgba(255,60,107,0.1)' : 'rgba(0,212,126,0.1)');
+  });
+}
+
+// ══════════════════════════════════════════════════
+//  MODULE 9: MOPI vs BTC
+// ══════════════════════════════════════════════════
+function drawDualAxis(canvasId, timestamps, mopiVals, btcVals) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  const dpr = window.devicePixelRatio || 1;
+  const W = canvas.offsetWidth || canvas.parentElement?.offsetWidth || 300;
+  const H = 160;
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+
+  const pad = { t: 8, b: 24, l: 8, r: 8 };
+  const cW = W - pad.l - pad.r;
+  const cH = H - pad.t - pad.b;
+  const n = Math.min(mopiVals.length, btcVals.length);
+  if (n < 2) return;
+
+  const xAt = (i) => pad.l + (i / (n - 1)) * cW;
+
+  // BTC axis (right)
+  const btcMin = Math.min(...btcVals.slice(0, n));
+  const btcMax = Math.max(...btcVals.slice(0, n));
+  const btcRange = btcMax - btcMin || 1;
+  const yBtc = (v) => pad.t + cH - ((v - btcMin) / btcRange) * cH;
+
+  // MOPI axis (left, 0-100)
+  const yMopi = (v) => pad.t + cH - (Math.max(0, Math.min(100, v)) / 100) * cH;
+
+  // Draw BTC area
+  ctx.beginPath();
+  ctx.moveTo(xAt(0), yBtc(btcVals[0]));
+  for (let i = 1; i < n; i++) ctx.lineTo(xAt(i), yBtc(btcVals[i]));
+  ctx.strokeStyle = '#3d8eff';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  ctx.lineTo(xAt(n - 1), pad.t + cH);
+  ctx.lineTo(xAt(0), pad.t + cH);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(61,142,255,0.08)';
+  ctx.fill();
+
+  // MOPI zone 30/70
+  const y30 = yMopi(30);
+  const y70 = yMopi(70);
+  ctx.fillStyle = 'rgba(255,255,255,0.03)';
+  ctx.fillRect(pad.l, y70, cW, y30 - y70);
+
+  // MOPI line
+  ctx.beginPath();
+  ctx.moveTo(xAt(0), yMopi(mopiVals[0]));
+  for (let i = 1; i < n; i++) ctx.lineTo(xAt(i), yMopi(mopiVals[i]));
+  ctx.strokeStyle = '#00d47e';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // 70/30 dashed lines
+  [30, 70].forEach(lvl => {
+    ctx.beginPath();
+    ctx.moveTo(pad.l, yMopi(lvl));
+    ctx.lineTo(pad.l + cW, yMopi(lvl));
+    ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.font = `${9 * dpr / dpr}px Inter,sans-serif`;
+    ctx.fillText(lvl.toString(), pad.l + 2, yMopi(lvl) - 2);
+  });
+
+  // X-axis time labels (first, mid, last)
+  if (timestamps?.length >= n) {
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.font = '9px Inter,sans-serif';
+    const fmt = (ts) => { const d = new Date(ts * 1000); return d.getDate() + '/' + (d.getMonth()+1); };
+    [[0, 'left'], [Math.floor((n-1)/2), 'center'], [n-1, 'right']].forEach(([i, align]) => {
+      ctx.textAlign = align;
+      const tx = align === 'left' ? pad.l : align === 'right' ? pad.l + cW : xAt(i);
+      ctx.fillText(fmt(timestamps[i]), tx, H - 6);
+    });
+  }
+}
+
+async function loadMopiVsBtc(signal) {
+  const data = await apiFetch('/api/mopi_vs_btc?period=' + currentPeriod, signal);
+  const el = document.getElementById('m9-content');
+  if (!data?.mopi?.length) { el.innerHTML = '<div class="error-state"><div class="error-icon">⚠</div>Données indisponibles</div>'; return; }
+
+  const mopi = data.mopi;
+  const btc = data.btc_price;
+  const ts = data.timestamps;
+  const lastMopi = mopi[mopi.length - 1];
+  const corr = data.correlations?.corr_now?.toFixed(2) ?? '—';
+  const mopiColor = lastMopi > 70 ? 'var(--green)' : lastMopi < 30 ? 'var(--red)' : 'var(--yellow)';
+  const mopiLabel = lastMopi > 70 ? 'Suracheté / Signal Long' : lastMopi < 30 ? 'Survendu / Signal Short' : 'Zone neutre';
+
+  el.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+      <span style="font-size:11px;color:var(--muted)">7 jours · résolution 1h</span>
+      <span style="font-size:13px;font-weight:800;color:${mopiColor}">MOPI ${lastMopi?.toFixed(1)} — ${mopiLabel}</span>
+    </div>
+    <div class="mopi-chart-wrap"><canvas id="canvas-mopi-btc"></canvas></div>
+    <div class="mopi-legend">
+      <div class="mopi-legend-item"><div class="mopi-legend-dot" style="background:#00d47e"></div>MOPI (axe 0–100)</div>
+      <div class="mopi-legend-item"><div class="mopi-legend-dot" style="background:#3d8eff"></div>BTC Price</div>
+    </div>
+    <div class="mopi-stats-row">
+      <div class="mopi-stat-box">
+        <div class="mopi-stat-lbl">MOPI actuel</div>
+        <div class="mopi-stat-val" style="color:${mopiColor}">${lastMopi?.toFixed(1)}</div>
+      </div>
+      <div class="mopi-stat-box">
+        <div class="mopi-stat-lbl">Corrélation BTC</div>
+        <div class="mopi-stat-val">${corr}</div>
+      </div>
+      <div class="mopi-stat-box">
+        <div class="mopi-stat-lbl">Signaux >70</div>
+        <div class="mopi-stat-val" style="color:var(--green)">${data.crossovers_above_70 ?? '—'}</div>
+      </div>
+    </div>
+  `;
+
+  requestAnimationFrame(() => {
+    drawDualAxis('canvas-mopi-btc', ts, mopi, btc);
+  });
+}
+
+
+// ══════════════════════════════════════════════════
+// ══════════════════════════════════════════════════
+//  RÉGIME DE MARCHÉ — FULL CLASSIFICATION (16 cas)
+// ══════════════════════════════════════════════════
+
+/* VERDICT_64 */
+function classifyRegimeFull({ vex, cex, gex, dex, vexTrend, cexTrend, gexTrend, dexTrend, flipDistPct, flipLevel }) { /* FLIP_PRICE_v1 */
+  // Signs
+  const vexBull = vex > 0;   // VEX+ = dealers buy BTC on IV up
+  const cexBull = cex > 0;   // CEX+ = dealers buy BTC as time passes
+  const gexBull = gex >= 0;  // GEX+ = stabilisateur
+  const dexBull = dex <= 0;  // DEX- = dealers buy BTC on dip = support
+
+  // Trends (up/down/flat)
+  const vexUp   = vexTrend === 'up';
+  const vexDown = vexTrend === 'down';
+  const cexUp   = cexTrend === 'up';
+  const cexDown = cexTrend === 'down';
+  const gexUp   = gexTrend === 'up';
+  const gexDown = gexTrend === 'down';
+  const dexUp   = dexTrend === 'up';
+  const dexDown = dexTrend === 'down';
+
+  // Trend helpers: is a signal "turning around"?
+  // vex is negative but rising = bearish force weakening
+  const vexTurning  = !vexBull && vexUp;   // VEX- turning up  → bear pressure easing
+  const vexStrength = vexBull  && vexUp;   // VEX+ strengthening
+  const vexFading   = vexBull  && vexDown; // VEX+ fading
+  const vexDeep     = !vexBull && vexDown; // VEX- deepening    → bear pressure growing
+  const cexTurning  = !cexBull && cexUp;   // CEX- turning up  → bear charm easing
+  const cexStrength = cexBull  && cexUp;   // CEX+ strengthening
+  const cexFading   = cexBull  && cexDown; // CEX+ fading
+  const cexDeep     = !cexBull && cexDown; // CEX- deepening
+
+  const bigVex = Math.abs(vex) > 20e6;
+  const bigCex = Math.abs(cex) > 10e6;
+  const bigExp = bigVex || bigCex;
+  const nearFlip2 = flipDistPct !== null && Math.abs(flipDistPct) <= 2.0;
+  const nearFlip5 = flipDistPct !== null && Math.abs(flipDistPct) <= 5.0;
+  // Format flip level as "$60,000" or fallback to distance only
+  const fmtFlip = flipLevel
+    ? `$${Math.round(flipLevel).toLocaleString()} (${flipDistPct >= 0 ? '+' : ''}${flipDistPct !== null ? flipDistPct.toFixed(1) : '?'}% du spot)`
+    : (flipDistPct !== null ? `${Math.abs(flipDistPct).toFixed(1)}% du spot` : '—');
+  const flipDir  = flipDistPct !== null && flipDistPct < 0 ? 'EN-DESSOUS du spot' : 'AU-DESSUS du spot';
+  const bullCount = [vexBull, cexBull, gexBull, dexBull].filter(Boolean).length;
+
+  const fmtM   = v => (v >= 0 ? '+' : '') + (v / 1e6).toFixed(1) + 'M';
+  const fmtB   = v => (v >= 0 ? '+' : '') + (v / 1e9).toFixed(2) + 'B';
+  const fmtDex = v => (v >= 0 ? '+' : '') + Math.round(v).toLocaleString();
+  const arr    = t => t === 'up' ? '↑' : t === 'down' ? '↓' : '→';
+
+  const signals = [
+    { name:'VEX',        formatted:fmtM(vex),    bull:vexBull, trendUp:vexUp,  trendFlat:vexTrend==='flat' },
+    { name:'CEX',        formatted:fmtM(cex),    bull:cexBull, trendUp:cexUp,  trendFlat:cexTrend==='flat' },
+    { name:'GEX',        formatted:fmtB(gex),    bull:gexBull, trendUp:gexUp,  trendFlat:gexTrend==='flat' },
+    { name:'DEX',        formatted:fmtDex(dex),  bull:dexBull, trendUp:dexUp,  trendFlat:dexTrend==='flat' },
+    { name:'Gamma Flip',
+      formatted:flipLevel
+        ? `$${Math.round(flipLevel).toLocaleString()} (${flipDistPct!==null?(flipDistPct>=0?'+':'')+flipDistPct.toFixed(1)+'%':'?'})`
+        : (flipDistPct!==null?(flipDistPct>=0?'+':'')+flipDistPct.toFixed(1)+'%':'—'),
+      bull:flipDistPct===null||flipDistPct>0, trendUp:null, trendFlat:true },
+    { name:'Régime GEX', formatted:gexBull?'STABILISATEUR':'AMPLIFICATEUR',
+      bull:gexBull, trendUp:null, trendFlat:true },
+  ];
+
+  const mk = (id, label, phase, color, confidence, urgency, bias, plain, raison, pro) => ({
+    id, label, phase, color, dot:color, confidence, urgency, bias,
+    signals, plain, raison, pro, advice: raison + ' ' + pro,
+  });
+
+  // ══════════════════════════════════════════════════════════════════
+  // GROUPE 1 — EXPLOSIF (flip ≤ 2% + bigExp)          [EXP-1..8]
+  // ══════════════════════════════════════════════════════════════════
+  if (nearFlip2 && bigExp) {
+
+    // EXP-1b : bullish + double trend confirmation
+    if (vexBull && dexBull && vexStrength && cexStrength) return mk(
+      'EXP-1b','EXPLOSION IMMINENTE — SQUEEZE HAUSSIER CONFIRMÉ','explosive','#ff6b00',
+      'ÉLEVÉE','CRITIQUE','LONG',
+      `Gamma Flip à ${fmtFlip} + VEX ${arr("up")} + CEX ${arr("up")} : la pression haussière des dealers s’accélère ET le flip est à portée. Tous les feux sont au vert pour un squeeze.`,
+      `Raison : VEX+↑/CEX+↑/DEX- avec flip < 2% = configuration squeeze la plus forte.`,
+      `Un trader pro entre LONG à taille complète, stop sous le flip exact, objectif prochain niveau de résistance majeur.`
+    );
+
+    // EXP-1 : bullish aligné
+    if (vexBull && dexBull) return mk(
+      'EXP-1','PRÉPARATION EXPLOSIVE — BIAIS HAUSSIER','explosive','#f59e0b',
+      'ÉLEVÉE','CRITIQUE','LONG',
+      `Gamma Flip à ${fmtFlip}. VEX+ et DEX- : les deux forces directionnelles poussent à la hausse. Un franchissement du flip vers le haut déclenche un squeeze mécanique.`,
+      `Raison : VEX+/DEX- alignés haussiers + flip à portée = squeeze potentiel.`,
+      `Un trader pro entre LONG à taille réduite (⅓), stop serré sous le flip exact, scale-in sur clôture horaire au-dessus.`
+    );
+
+    // EXP-2b : bearish + double trend deepening
+    if (!vexBull && !dexBull && vexDeep && cexDeep) return mk(
+      'EXP-2b','EXPLOSION IMMINENTE — CASCADE BAISSIÈRE CONFIRMÉE','explosive','#b91c1c',
+      'ÉLEVÉE','CRITIQUE','SHORT',
+      `Gamma Flip à ${fmtFlip} + VEX ${arr("down")} + CEX ${arr("down")} : la pression vendeuse des dealers s’emballe AND le flip est imminent. Cascade de re-hedging pratiquement certaine.`,
+      `Raison : VEX-↓/CEX-↓/GEX-/DEX+ + flip < 2% = configuration cascade baissière maximale.`,
+      `Un trader pro entre SHORT à taille complète ou achète des puts échéance < 1 semaine. Stop au-dessus du flip. Objectif : -5% minimum.`
+    );
+
+    // EXP-2 : bearish aligné
+    if (!vexBull && !dexBull && !gexBull) return mk(
+      'EXP-2','PRÉPARATION EXPLOSIVE — BIAIS BAISSIER','explosive','#ef4444',
+      'ÉLEVÉE','CRITIQUE','SHORT',
+      `Gamma Flip à ${fmtFlip}. VEX-/CEX-/GEX- actifs : les dealers sont en mode vente et amplifient. Un passage sous le flip déclenche la cascade.`,
+      `Raison : VEX-/GEX- baissiers + DEX+ (pression) + flip imminent = cascade down probable.`,
+      `Un trader pro se positionne SHORT ou achète des puts courte échéance. Stop serré au-dessus du flip. Vendre les résistances, pas les bas.`
+    );
+
+    // EXP-3b : retournement en cours + flip proche
+    if (vexTurning && cexTurning) return mk(
+      'EXP-3b','EXPLOSION — RETOURNEMENT HAUSSIER EN COURS','explosive','#f97316',
+      'MODÉRÉE','CRITIQUE','LONG',
+      `Gamma Flip à ${fmtFlip}. VEX- mais ${arr("up")} + CEX- mais ${arr("up")} : les forces baissières se retournent simultanément avec le flip tout proche. Rebond explosif possible.`,
+      `Raison : double retournement VEX+CEX + flip < 2% = rebond potentiellement violent.`,
+      `Un trader pro prépare un LONG conditionnel : entre uniquement sur clôture au-dessus du flip avec confirmation des deux trends. Stop sous le low du jour.`
+    );
+
+    // EXP-3 : ambiguïté directionnelle
+    if (vexBull !== dexBull) return mk(
+      'EXP-3','PRÉPARATION EXPLOSIVE — DIRECTION INCONNUE','explosive','#f59e0b',
+      'MODÉRÉE','CRITIQUE','STRANGLE',
+      `Gamma Flip à ${fmtFlip}. VEX et DEX se contredisent sur la direction. Le mouvement sera violent — le sens reste incertain.`,
+      `Raison : explosion certaine, direction inconnue = strangle obligatoire.`,
+      `Un trader pro achète un strangle proche échéance dimensionné pour rentabiliser un move ≥ 5% dans n’importe quel sens.`
+    );
+
+    // EXP-4b : momentum confirmé → actionnable
+    if ((vexStrength || vexUp) && (cexStrength || cexUp)) return mk(
+      'EXP-4b','PRÉPARATION EXPLOSIVE — MOMENTUM CONFIRMÉ','explosive','#fb923c',
+      'MODÉRÉE','CRITIQUE','LONG',
+      `Gamma Flip à ${fmtFlip}. Les trends VEX ${arr(vexTrend)} et CEX ${arr(cexTrend)} confirment un momentum haussier même si les signes restent mixtes.`,
+      `Raison : EXP + trends VEX/CEX confirmés = momentum suffisant pour entrer.`,
+      `Un trader pro entre LONG à demi-taille sur cassure du flip, stop sous le low récent. Ne pas attendre une confirmation parfaite.`
+    );
+
+    // EXP-4 : pas de momentum
+    return mk(
+      'EXP-4','PRÉPARATION EXPLOSIVE — EN ATTENTE','explosive','#f59e0b',
+      'MODÉRÉE','ÉLEVÉE','PATIENCE',
+      `Gamma Flip à ${fmtFlip}. Conditions explosives réunies mais momentum GEX/DEX/VEX/CEX absent. Le déclencheur n’est pas encore arrivé.`,
+      `Raison : setup explosif confirmé mais sans momentum = risque de fakeout.`,
+      `Un trader pro place une alerte au flip exact et entre UNIQUEMENT sur clôture horaire au-delà. Pas d’entrée anticipée.`
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════
+  // GROUPE 2 — FULL BEAR (4/4 baissiers)               [FB-1..5]
+  // ══════════════════════════════════════════════════════════════════
+  if (!vexBull && !cexBull && !gexBull && !dexBull) {
+
+    // FB-2b : bear + vex/cex qui s'approfondissent
+    if (vexDeep && cexDeep && gexDown) return mk(
+      'FB-2b','ACCÉLÉRATION BAISSIÈRE — MAXIMUM BEARISH','acceleration','#7f1d1d',
+      'ÉLEVÉE','CRITIQUE','SHORT',
+      `4/4 baissiers + VEX ${arr("down")} + CEX ${arr("down")} + GEX ${arr("down")} : les trois forces baissières s’intensifient simultanément. Configuration la plus dangereuse pour être long.`,
+      `Raison : triple deepening VEX/CEX/GEX = momentum baissier maximal.`,
+      `Un trader pro ENTRE SHORT à taille maximale ou achète des puts OTM. Chaque rebond est une opportunité de renforcer. Objectifs : supports majeurs.`
+    );
+
+    // FB-2 : gex trend down
+    if (gexDown) return mk(
+      'FB-2','ACCÉLÉRATION BAISSIÈRE — RENFORCÉE','acceleration','#dc2626',
+      'ÉLEVÉE','CRITIQUE','SHORT',
+      `4/4 baissiers ET GEX ${arr("down")}. VEX-/CEX- : les dealers vendent mécaniquement. GEX- qui plonge : l’amplification augmente. Chaque baisse peut s’emballer.`,
+      `Raison : 4/4 baissiers + GEX qui accélère = conditions les plus dangereuses pour être long.`,
+      `Un trader pro RENFORCE le SHORT ou achète des puts supplémentaires. Profits partiels aux supports en chemin.`
+    );
+
+    // FB-1b : bear mais vex/cex qui se retournent
+    if (vexTurning && cexTurning) return mk(
+      'FB-1b','ACCÉLÉRATION BAISSIÈRE — RETOURNEMENT VEX/CEX','acceleration','#f87171',
+      'MODÉRÉE','NORMALE','SHORT',
+      `4/4 baissiers MAIS VEX ${arr("up")} et CEX ${arr("up")} : les deux flows options commencent à se retourner. La pression baissière de fond existe encore mais perd son moteur.`,
+      `Raison : 4/4 bear mais double retournement VEX+CEX = prendre les profits, ne pas renforcer.`,
+      `Un trader pro SORT 50% du SHORT immédiatement. Garde le reste avec stop serré. Surveille si les signes VEX/CEX basculent en positif.`
+    );
+
+    // FB-1 : gex trend up
+    if (gexUp) return mk(
+      'FB-1','ACCÉLÉRATION BAISSIÈRE — FREIN EN FORMATION','acceleration','#f87171',
+      'MODÉRÉE','ÉLEVÉE','SHORT',
+      `4/4 baissiers mais GEX ${arr("up")}. La pression vendeuse est intacte mais les dealers réduisent l’amplification. Un rebond technique est possible.`,
+      `Raison : 4/4 bear mais GEX remonte = momentum baissier qui s’essouffle légèrement.`,
+      `Un trader pro RÉDUIT le SHORT de moitié, serre le stop, attend une nouvelle consolidation avant de re-shorter.`
+    );
+
+    // FB-3 : flat
+    return mk(
+      'FB-3','ACCÉLÉRATION BAISSIÈRE — STABLE','acceleration','#ef4444',
+      'ÉLEVÉE','ÉLEVÉE','SHORT',
+      `4/4 baissiers, régime stable ${arr("flat")}. VEX-/CEX- forcent les dealers à vendre. GEX- amplifie. DEX+ n’apporte aucun soutien.`,
+      `Raison : 4/4 bear régime établi = tenir les shorts sans stress.`,
+      `Un trader pro MAINTIENT le SHORT avec stop au-dessus du dernier swing high.`
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════
+  // GROUPE 3 — FULL BULL (4/4 haussiers)               [FL-1..5]
+  // ══════════════════════════════════════════════════════════════════
+  if (vexBull && cexBull && gexBull && dexBull) {
+
+    // FL-2b : bull + vex/cex qui s'accélèrent
+    if (vexStrength && cexStrength && gexUp) return mk(
+      'FL-2b','RALENTISSEMENT HAUSSIER — MAXIMUM BULLISH','slowdown','#14532d',
+      'ÉLEVÉE','NORMALE','LONG',
+      `4/4 haussiers + VEX ${arr("up")} + CEX ${arr("up")} + GEX ${arr("up")} : les trois forces haussières s’intensifient. Configuration la plus solide possible. Les corrections seront minimes et brèves.`,
+      `Raison : triple renforcement VEX/CEX/GEX = structure haussière auto-renforcée.`,
+      `Un trader pro entre LONG à taille maximale. Tient sans modifier. Invalide uniquement si GEX passe en négatif.`
+    );
+
+    // FL-2 : gex up
+    if (gexUp) return mk(
+      'FL-2','RALENTISSEMENT HAUSSIER — RENFORCÉ','slowdown','#22c55e',
+      'ÉLEVÉE','NORMALE','LONG',
+      `4/4 haussiers ET GEX ${arr("up")}. VEX+/CEX+ : les dealers achètent mécaniquement. GEX+ croissant : le pin haussier se renforce. DEX- : support sur les dips.`,
+      `Raison : 4/4 haussiers + GEX croissant = structure la plus solide possible.`,
+      `Un trader pro RENFORCE le LONG avec confiance. Ajoute sur cassure de résistance. Invalide si GEX passe en négatif.`
+    );
+
+    // FL-1b : bull mais vex/cex qui s'estompent
+    if (vexFading && cexFading) return mk(
+      'FL-1b','RALENTISSEMENT HAUSSIER — SORTIE PRÉCOCE','slowdown','#bbf7d0',
+      'MODÉRÉE','NORMALE','LONG',
+      `4/4 haussiers MAIS VEX ${arr("down")} et CEX ${arr("down")} : les deux flows options s’affaiblissent simultanément. La structure tient encore mais le moteur s’éteint.`,
+      `Raison : double fading VEX+CEX malgré 4/4 bull = sortir avant les autres.`,
+      `Un trader pro PREND 50% des profits immédiatement. Élève le stop agressivement. Ne renforce pas. Surveille si un signe bascule en négatif.`
+    );
+
+    // FL-1 : gex down
+    if (gexDown) return mk(
+      'FL-1','RALENTISSEMENT HAUSSIER — FRAGILE','slowdown','#84cc16',
+      'MODÉRÉE','NORMALE','LONG',
+      `4/4 haussiers mais GEX ${arr("down")}. La structure tient encore mais la force stabilisatrice s’érode.`,
+      `Raison : 4/4 bull mais GEX décroissant = surveillance accrue.`,
+      `Un trader pro PREND 30% des profits, élève le stop sous le dernier support. Ne renforce pas.`
+    );
+
+    // FL-3 : flat
+    return mk(
+      'FL-3','RALENTISSEMENT HAUSSIER — STABLE','slowdown','#4ade80',
+      'ÉLEVÉE','NORMALE','LONG',
+      `4/4 haussiers, régime stable. VEX+/CEX+ font acheter les dealers. GEX+/DEX- amortissent les corrections. Mécanique de soutien pleinement opérationnelle.`,
+      `Raison : 4/4 bull régime stable = tenir sans modifier.`,
+      `Un trader pro MAINTIENT le LONG sans changement. Surveille uniquement une cassure sous le Gamma Flip.`
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════
+  // GROUPE 4 — COMPRESSION VEX≠CEX                     [COMP-0..6]
+  // ══════════════════════════════════════════════════════════════════
+  if (vexBull !== cexBull) {
+
+    // COMP-0 : flip proche = pré-explosif
+    if (nearFlip5) return mk(
+      'COMP-0','COMPRESSION PRÉ-EXPLOSIVE','compression','#a855f7',
+      'ÉLEVÉE','CRITIQUE','STRANGLE',
+      `VEX et CEX s’opposent ET Gamma Flip ${fmtFlip} (zone < 5%). Double tension : forces contradictoires + proximité du flip. Breakout violent imminent dans un sens ou l’autre.`,
+      `Raison : compression interne + flip proche = énergie accumulée sans direction.`,
+      `Un trader pro achète un strangle ou straddle. Le Gamma Flip est le déclencheur à surveiller.`
+    );
+
+    // COMP-5 : compression EN FORMATION (trends divergents)
+    if (vexTrend !== 'flat' && cexTrend !== 'flat' && vexTrend !== cexTrend) return mk(
+      'COMP-5','COMPRESSION EN FORMATION — PRÉPARER LE STRANGLE','compression','#c084fc',
+      'MODÉRÉE','ÉLEVÉE','STRANGLE',
+      `VEX ${arr(vexTrend)} et CEX ${arr(cexTrend)} : les deux trends divergent. Les signes ne sont pas encore opposés mais ils y vont. La compression se forme — agir avant qu’elle soit établie.`,
+      `Raison : trends VEX/CEX divergents = compression en construction = acheter la vol maintenant avant qu’elle monte.`,
+      `Un trader pro ACHÈTE le strangle MAINTENANT pendant que la vol est encore bon marché. Plus rentable qu’attendre la compression établie.`
+    );
+
+    // COMP-1 : VEX+/CEX-/GEX+/DEX-
+    if (vexBull && !cexBull && gexBull && dexBull) return mk(
+      'COMP-1','COMPRESSION TEMPORELLE — BIAIS HAUSSIER','compression','#8b5cf6',
+      'MODÉRÉE','NORMALE','LONG',
+      `VEX+ (vol haussière) mais CEX- (temps baissier). GEX+/DEX- stabilisent. Tension vol vs temps avec socle haussier. Résolution probable sur mouvement de vol ou expiration.`,
+      `Raison : vanna haussière domine sur gamma/dex stables = biais long spot, pas via options.`,
+      `Un trader pro est LONG en spot/futures. Évite les calls (charm détruit leur valeur). Surveille les expirations comme déclencheur.`
+    );
+
+    // COMP-2 : VEX-/CEX+/GEX-/DEX+
+    if (!vexBull && cexBull && !gexBull && !dexBull) return mk(
+      'COMP-2','COMPRESSION TEMPORELLE — BIAIS BAISSIER','compression','#7c3aed',
+      'MODÉRÉE','NORMALE','SHORT',
+      `CEX+ (temps haussier) mais VEX- (vol baissière). GEX-/DEX+ amplifient. Charm positif mais tout le reste pousse à la baisse. Spike de vol déclenche les ventes.`,
+      `Raison : charm seul face à vanna/gex/dex baissiers = biais short en spot/futures.`,
+      `Un trader pro est SHORT en spot/futures. Évite les puts (charm limite leur dégradation). Vigilant sur les spikes de vol.`
+    );
+
+    // COMP-3 : VEX+/CEX-/GEX-/DEX+
+    if (vexBull && !cexBull && !gexBull && !dexBull) return mk(
+      'COMP-3','COMPRESSION — TENSION NON RÉSOLUE','compression','#9333ea',
+      'FAIBLE','NORMALE','PATIENCE',
+      `VEX+ contre CEX-/GEX-/DEX+. Un signal haussier contre trois baissiers. Les dealers reçoivent des signaux contradictoires selon le niveau de vol.`,
+      `Raison : un seul signal positif contre trois négatifs = pas d’edge directionnel.`,
+      `Un trader pro ATTEND. Surveille si VEX+ s’amplifie (bigExp) pour valider la direction.`
+    );
+
+    // COMP-4 : VEX-/CEX+/GEX+/DEX-
+    return mk(
+      'COMP-4','COMPRESSION — STABLE CONDITIONNELLE','compression','#a78bfa',
+      'FAIBLE','NORMALE','PATIENCE',
+      `VEX- contre CEX+/GEX+/DEX-. GEX et DEX soutiennent mais la vanna négative menace si la vol monte. Conditionnellement stable.`,
+      `Raison : structure conditionnellement haussière mais VEX- est une bombe si la vol monte.`,
+      `Un trader pro entre LONG uniquement si la vol reste basse. Stop sous le support DEX.`
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════
+  // GROUPE 5 — DIVERGENCE GEX vs VEX+CEX consensus     [DIV-1..6]
+  // ══════════════════════════════════════════════════════════════════
+  if (vexBull === cexBull && gexBull !== vexBull) {
+
+    // DIV-1b : GEX- + double renforcement baissier options
+    if (!gexBull && vexBull && cexBull && dexBull && vexStrength && cexStrength) return mk(
+      'DIV-1b','DIVERGENCE — LONG HAUSSIER RENFORCÉ','divergence','#ca8a04',
+      'MODÉRÉE','ÉLEVÉE','LONG',
+      `VEX ${arr("up")}/CEX ${arr("up")} : les deux flows options s’accélèrent. GEX- amplifie — les corrections seront violentes MAIS les hausses aussi. Triple haussier options avec amplification.`,
+      `Raison : VEX+↑/CEX+↑/DEX- avec GEX- = mouvement haussier potentiellement explosif.`,
+      `Un trader pro entre LONG à taille réduite avec protection put obligatoire. Profite de l’amplification GEX- à la hausse mais se couvre contre le retournement.`
+    );
+
+    // DIV-1 : GEX- vs VEX+/CEX+
+    if (!gexBull && vexBull && cexBull && dexBull) return mk(
+      'DIV-1','DIVERGENCE — HAUSSIER AVEC GAMMA AMPLIFIÉ','divergence','#eab308',
+      'MODÉRÉE','ÉLEVÉE','LONG',
+      `VEX+/CEX+/DEX- haussiers mais GEX- amplifie tous les moves. Direction haussière mais chaque correction sera exagérée.`,
+      `Raison : 3/4 haussiers mais GEX- = corrections exagérées = protection obligatoire.`,
+      `Un trader pro est LONG spot avec puts protection (≤2% OTM). Stop plus large que la normale.`
+    );
+
+    // DIV-2b : GEX+ pin + vex/cex qui s'approfondissent
+    if (gexBull && !vexBull && !cexBull && !dexBull && vexDeep && cexDeep) return mk(
+      'DIV-2b','DIVERGENCE — TEMPÊTE IMMINENTE SOUS LE PIN','divergence','#92400e',
+      'ÉLEVÉE','CRITIQUE','PATIENCE',
+      `GEX+ pin le marché mais VEX ${arr("down")}/CEX ${arr("down")} : les deux flows baissiers s’accélèrent sous la surface. La pression s’accumule. Quand le pin cède, le move sera très violent.`,
+      `Raison : GEX+ retient mais VEX/CEX deepening = tempête sous tension = préparer le SHORT.`,
+      `Un trader pro accumule des PUTS à faible coût pendant le pin. Prépare un SHORT conditionnel déclenché sur cassure du GEX+. Position sizing maximal.`
+    );
+
+    // DIV-2 : GEX+ vs VEX-/CEX-
+    if (gexBull && !vexBull && !cexBull && !dexBull) return mk(
+      'DIV-2','DIVERGENCE — CALME ARTIFICIEL','divergence','#ca8a04',
+      'MODÉRÉE','ÉLEVÉE','PATIENCE',
+      `GEX+ pin le marché artificiellement. VEX-/CEX-/DEX+ signalent une pression vendeuse profonde. Calme trompeur avant tempête.`,
+      `Raison : GEX+ maintient la stabilité mais flows options intégralement baissiers = temporaire.`,
+      `Un trader pro accumule des PUTS à faible coût pendant le pin. Attend l’expiration ou cassure du GEX+.`
+    );
+
+    // DIV-3 : GEX- vs mixed
+    if (!gexBull && vexBull && !cexBull) return mk(
+      'DIV-3','DIVERGENCE — VOL PLAY AMPLIFIÉ','divergence','#d97706',
+      'MODÉRÉE','ÉLEVÉE','STRANGLE',
+      `GEX- amplifie, VEX+ haussier mais CEX- baissier. Volatilité accrue sans direction nette — le marché peut partir violemment dans les deux sens.`,
+      `Raison : GEX amplificateur + signaux mixtes = strangle idéal.`,
+      `Un trader pro achète un strangle et gère le delta au fil du mouvement.`
+    );
+
+    // DIV-4 : GEX+ contre mixte
+    return mk(
+      'DIV-4','DIVERGENCE — PIN TEMPORAIRE','divergence','#b45309',
+      'FAIBLE','NORMALE','PATIENCE',
+      `GEX+ stabilise mais tension sous-jacente mixte. Le pin est temporaire.`,
+      `Raison : GEX+ retient mais pression sous-jacente réelle = attendre le signal.`,
+      `Un trader pro prépare un SHORT conditionnel déclenché si GEX_trend passe à ’down’. Zéro position en attendant.`
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════
+  // GROUPE 6 — MODERATE BULL (3/4 haussiers)            [MOD-B1..8]
+  // ══════════════════════════════════════════════════════════════════
+  if (bullCount === 3) {
+
+    // Signal divergent = GEX-
+    if (!gexBull) {
+      if (vexStrength && cexStrength) return mk(
+        'MOD-B1b','HAUSSIER MODÉRÉ — OPTIONS ACCÉLÈRENT','slowdown','#22c55e',
+        'MODÉRÉE','ÉLEVÉE','LONG',
+        `VEX ${arr("up")}/CEX ${arr("up")} : les flows options s’accélèrent côté haussier malgré GEX-. La dynamique options va probablement forcer GEX à remonter sous peu.`,
+        `Raison : VEX+↑/CEX+↑ avec GEX- = pression pour que GEX remonte = position longue avec conviction croissante.`,
+        `Un trader pro entre LONG à taille normale. Le stop reste plus large à cause du GEX- mais la conviction est là. Surveille GEX pour renforcer.`
+      );
+      return mk(
+        'MOD-B1','HAUSSIER MODÉRÉ — GAMMA AMPLIFIE','slowdown','#4ade80',
+        'MODÉRÉE','ÉLEVÉE','LONG',
+        `VEX+/CEX+/DEX- haussiers mais GEX- amplifie tous les moves. Direction haussière, corrections exagérées.`,
+        `Raison : 3/4 bull mais GEX- = corrections exagérées = stop plus large obligatoire.`,
+        `Un trader pro est LONG avec stop 30% plus large que d’habitude. Size réduit de 20%.`
+      );
+    }
+
+    // Signal divergent = DEX+
+    if (!dexBull) return mk(
+      'MOD-B2','HAUSSIER MODÉRÉ — REBONDS VENDUS','slowdown','#86efac',
+      'MODÉRÉE','NORMALE','LONG',
+      `VEX+/CEX+/GEX+ haussiers mais DEX+ : dealers vendent les rebonds. Hausse en escalier avec pullbacks fréquents.`,
+      `Raison : 3/4 bull mais DEX+ = acheter les dips, pas chasser les hausses.`,
+      `Un trader pro ACHÈTE LES DIPS. Prend profits rapides sur chaque leg. Évite le levier sur les sommets.`
+    );
+
+    // Signal divergent = CEX-
+    if (!cexBull) {
+      if (cexTurning) return mk(
+        'MOD-B3b','HAUSSIER MODÉRÉ — CHARM QUI SE RETOURNE','slowdown','#4ade80',
+        'MODÉRÉE','NORMALE','LONG',
+        `VEX+/GEX+/DEX- haussiers + CEX- MAIS cexTrend ${arr("up")} : le charm baissier est en train de se retourner. Dans quelques heures il pourrait passer positif et donner le signal 4/4.`,
+        `Raison : 3/4 bull + CEX- qui se retourne = structure qui s’améliore = bon timing d’entrée.`,
+        `Un trader pro entre LONG maintenant en anticipation du passage CEX+. Stop sous le dernier support. Objectif : FL-3 dans les 24-48h.`
+      );
+      if (gexUp) return mk(
+        'MOD-B3','HAUSSIER MODÉRÉ — COURT TERME SEULEMENT','slowdown','#4ade80',
+        'MODÉRÉE','NORMALE','LONG',
+        `VEX+/GEX+${arr("up")}/DEX- haussiers mais CEX- : le temps travaille contre. GEX monte — bon court terme.`,
+        `Raison : 3/4 bull + CEX- + GEX qui monte = long court terme uniquement.`,
+        `Un trader pro prend des CALLS COURTE ÉCHÉANCE (< 2 semaines) ou trade le spot sur 24-48h max.`
+      );
+      return mk(
+        'MOD-B4','HAUSSIER MODÉRÉ — STRUCTURE EN DÉGRADATION','slowdown','#a3e635',
+        'FAIBLE','NORMALE','PATIENCE',
+        `VEX+/GEX+/DEX- haussiers mais CEX- ET GEX ${arr(gexTrend)}. Double érosion charm + GEX.`,
+        `Raison : 3/4 bull mais CEX- + GEX décroissant = double érosion = sécuriser les gains.`,
+        `Un trader pro SÉCURISE 30% des gains. Attend stabilisation du GEX trend avant de recharger.`
+      );
+    }
+
+    // Signal divergent = VEX-
+    if (!vexBull) {
+      if (vexTurning) return mk(
+        'MOD-B5b','HAUSSIER MODÉRÉ — VANNA QUI SE RETOURNE','slowdown','#4ade80',
+        'MODÉRÉE','NORMALE','LONG',
+        `CEX+/GEX+/DEX- haussiers + VEX- MAIS vexTrend ${arr("up")} : la vanna baissière se retourne. Potentiel de passage à 4/4 haussiers.`,
+        `Raison : 3/4 bull + VEX- qui remonte = signal d’amélioration = renforcer en anticipation.`,
+        `Un trader pro renforce légèrement le LONG en anticipation du passage VEX+. Stop sous support récent.`
+      );
+      if (dexDown) return mk(
+        'MOD-B5','HAUSSIER MODÉRÉ — SPOT SANS OPTIONS','slowdown','#4ade80',
+        'MODÉRÉE','NORMALE','LONG',
+        `CEX+/GEX+/DEX- haussiers mais VEX- : toute hausse de vol détruira les calls.`,
+        `Raison : 3/4 bull mais VEX- = options chères et inefficaces = trader le sous-jacent direct.`,
+        `Un trader pro est LONG en spot ou futures uniquement. Ignore les calls dans ce régime.`
+      );
+      return mk(
+        'MOD-B6','HAUSSIER MODÉRÉ — SUPPORT QUI S’AFFAIBLIT','slowdown','#86efac',
+        'FAIBLE','NORMALE','LONG',
+        `CEX+/GEX+/DEX- haussiers mais VEX- et DEX trend ${arr(dexTrend)}.`,
+        `Raison : 3/4 bull mais VEX- + DEX support en diminution = stop proche obligatoire.`,
+        `Un trader pro TIENT le long avec stop juste sous le dernier support DEX. Pas de renforcement.`
+      );
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════════
+  // GROUPE 7 — MODERATE BEAR (3/4 baissiers)            [MOD-S1..8]
+  // ══════════════════════════════════════════════════════════════════
+  if (bullCount === 1) {
+
+    // Signal divergent = GEX+
+    if (gexBull) {
+      if (vexTurning && cexTurning) return mk(
+        'MOD-S1b','BAISSIER MODÉRÉ — RETOURNEMENT OPTIONS','acceleration','#fca5a5',
+        'MODÉRÉE','NORMALE','PATIENCE',
+        `VEX-/CEX-/DEX+ baissiers mais GEX+ stabilise ET VEX ${arr("up")}/CEX ${arr("up")} : les flows options commencent à remonter. Signal de retournement précoce.`,
+        `Raison : 3/4 bear mais double retournement VEX+CEX + GEX stabilisateur = ne pas shorter ici.`,
+        `Un trader pro FERME les shorts existants. Surveille le passage VEX/CEX en positif pour initier un long.`
+      );
+      return mk(
+        'MOD-S1','BAISSIER MODÉRÉ — GAMMA AMORTIT','acceleration','#f87171',
+        'MODÉRÉE','NORMALE','SHORT',
+        `VEX-/CEX-/DEX+ baissiers mais GEX+ pin le marché. Baisse graduelle avec rebonds violents.`,
+        `Raison : 3/4 bear mais GEX+ = baisse en escalier = vendre les rebonds.`,
+        `Un trader pro VEND LES REBONDS vers les strikes de forte OI.`
+      );
+    }
+
+    // Signal divergent = DEX-
+    if (dexBull) return mk(
+      'MOD-S2','BAISSIER MODÉRÉ — SUPPORTS TENACES','acceleration','#fca5a5',
+      'MODÉRÉE','NORMALE','SHORT',
+      `VEX-/CEX-/GEX- baissiers mais DEX- amène des acheteurs mécaniques sur les dips.`,
+      `Raison : 3/4 bear mais DEX- = supports qui tiennent = prendre profits aux supports.`,
+      `Un trader pro PREND PROFITS PARTIELS aux niveaux support DEX. Re-shorte sur les rebonds.`
+    );
+
+    // Signal divergent = CEX+
+    if (cexBull) {
+      if (cexFading) return mk(
+        'MOD-S3b','BAISSIER MODÉRÉ — CHARM QUI S’EFFACE','acceleration','#ef4444',
+        'ÉLEVÉE','ÉLEVÉE','SHORT',
+        `VEX-/GEX-/DEX+ baissiers + CEX+ MAIS cexTrend ${arr("down")} : le seul frein au bearish est en train de céder. Quand CEX passe négatif, c’est FB-3.`,
+        `Raison : 3/4 bear + CEX+ qui fane = transition vers full bear imminente = renforcer maintenant.`,
+        `Un trader pro RENFORCE le SHORT en anticipation du passage CEX-. La fenêtre d’entrée optimale est maintenant.`
+      );
+      if (gexDown) return mk(
+        'MOD-S3','BAISSIER MODÉRÉ — ACCÉLÉRATION','acceleration','#ef4444',
+        'ÉLEVÉE','ÉLEVÉE','SHORT',
+        `VEX-/GEX-${arr("down")}/DEX+ baissiers, CEX+ ralentit mais GEX s’aggrave.`,
+        `Raison : 3/4 bear + GEX qui plonge = accélération = renforcer le short.`,
+        `Un trader pro RENFORCE le SHORT ou ajoute des puts à chaque rebond faible.`
+      );
+      return mk(
+        'MOD-S4','BAISSIER MODÉRÉ — MOMENTUM QUI S’ÉPUISE','acceleration','#fca5a5',
+        'MODÉRÉE','NORMALE','SHORT',
+        `VEX-/GEX-/DEX+ baissiers, CEX+ et GEX ${arr(gexTrend)}.`,
+        `Raison : 3/4 bear mais GEX remonte + CEX+ = momentum baissier s’épuise = réduire.`,
+        `Un trader pro PREND 50% des profits short. Attend si GEX redevient positif.`
+      );
+    }
+
+    // Signal divergent = VEX+
+    if (vexBull) {
+      if (vexFading) return mk(
+        'MOD-S5b','BAISSIER MODÉRÉ — VANNA QUI CÈDE','acceleration','#ef4444',
+        'MODÉRÉE','ÉLEVÉE','SHORT',
+        `CEX-/GEX-/DEX+ baissiers + VEX+ MAIS vexTrend ${arr("down")} : le seul signal haussier restant s’affaiblit. Transition vers 4/4 bear en cours.`,
+        `Raison : 3/4 bear + VEX+ qui fane = renforcer le short avant le passage complet.`,
+        `Un trader pro RENFORCE le SHORT progressivement. La vanna en baisse confirme la direction.`
+      );
+      if (dexUp) return mk(
+        'MOD-S5','BAISSIER MODÉRÉ — PRESSION CROISSANTE','acceleration','#f87171',
+        'MODÉRÉE','ÉLEVÉE','SHORT',
+        `CEX-/GEX-/DEX+ baissiers, VEX+ limite mais DEX trend ${arr("up")} augmente la pression.`,
+        `Raison : 3/4 bear + DEX pressure qui monte = short valide malgré VEX+.`,
+        `Un trader pro est SHORT avec stop serré. Size réduit de 20% à cause du VEX+.`
+      );
+      return mk(
+        'MOD-S6','BAISSIER MODÉRÉ — MOMENTUM DOUTEUX','acceleration','#fca5a5',
+        'FAIBLE','NORMALE','PATIENCE',
+        `CEX-/GEX-/DEX+ baissiers mais VEX+ et DEX trend ${arr(dexTrend)}.`,
+        `Raison : 3/4 bear mais VEX+ + DEX pression qui baisse = ne pas initier de short.`,
+        `Un trader pro ATTEND. Ne rentre pas short ici. Surveille si VEX+ prend le dessus.`
+      );
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════════
+  // GROUPE 8 — NEUTRAL (2/4)                            [NEU-1..6]
+  // ══════════════════════════════════════════════════════════════════
+
+  // NEU-5 : neutralité avec trends convergents haussiers → breakout bull
+  if (bullCount === 2 && vexUp && cexUp && gexUp) return mk(
+    'NEU-5','NEUTRALITÉ — BREAKOUT HAUSSIER EN PRÉPARATION','neutral','#22c55e',
+    'MODÉRÉE','ÉLEVÉE','LONG',
+    `2/4 signaux haussiers MAIS VEX ${arr("up")}/CEX ${arr("up")}/GEX ${arr("up")} : les trois trends convergent à la hausse. Les signes retarderont mais les trends annoncent la rupture.`,
+    `Raison : neutralité des signes mais triple trend haussier = breakout bull probable dans 2-4h.`,
+    `Un trader pro prend une POSITION LONG LÉGÈRE (25% taille) en anticipation. Stop sous support. La rupture des signes sera la confirmation pour renforcer.`
+  );
+
+  // NEU-6 : neutralité avec trends convergents baissiers → breakout bear
+  if (bullCount === 2 && vexDown && cexDown && gexDown) return mk(
+    'NEU-6','NEUTRALITÉ — BREAKOUT BAISSIER EN PRÉPARATION','neutral','#ef4444',
+    'MODÉRÉE','ÉLEVÉE','SHORT',
+    `2/4 signaux haussiers MAIS VEX ${arr("down")}/CEX ${arr("down")}/GEX ${arr("down")} : les trois trends convergent à la baisse. Les signes retarderont mais les trends annoncent la rupture.`,
+    `Raison : neutralité des signes mais triple trend baissier = breakout bear probable dans 2-4h.`,
+    `Un trader pro prend une POSITION SHORT LÉGÈRE (25% taille) en anticipation. Stop au-dessus résistance. La rupture des signes sera la confirmation pour renforcer.`
+  );
+
+  if (bullCount === 2) {
+    if (vexBull === cexBull && gexBull === dexBull && vexBull !== gexBull) {
+      if (!vexBull && gexBull) return mk(
+        'NEU-1','NEUTRALITÉ — VENDRE LA VOL','neutral','#64748b',
+        'MODÉRÉE','NORMALE','STRANGLE',
+        `VEX-/CEX- vs GEX+/DEX-. Deux forces s’annulent. Marché en range comprimé.`,
+        `Raison : forces opposées qui s’équilibrent = pas de direction = collecter la prime.`,
+        `Un trader pro VEND des strangles à faible delta (≥15% OTM) et collecte la prime.`
+      );
+      return mk(
+        'NEU-2','NEUTRALITÉ — ACHETER LA VOL','neutral','#6366f1',
+        'MODÉRÉE','ÉLEVÉE','STRANGLE',
+        `VEX+/CEX+ vs GEX-/DEX+. Options haussières + GEX amplificateur.`,
+        `Raison : options haussières + GEX amplificateur = vol accrue sans direction = acheter la vol.`,
+        `Un trader pro ACHÈTE un strangle et profite de l’amplification GEX dans un sens ou l’autre.`
+      );
+    }
+    if (vexBull && gexBull && !cexBull && !dexBull) return mk(
+      'NEU-3','NEUTRALITÉ — ATTENDRE LE CHARM','neutral','#475569',
+      'FAIBLE','NORMALE','PATIENCE',
+      `VEX+/GEX+ soutiennent, CEX-/DEX+ tirent à la baisse. CEX trend ou GEX trend donnera la direction.`,
+      `Raison : 2/2 forces opposées = attendre que le charm se résolve.`,
+      `Un trader pro ATTEND que CEX_trend donne un signal. Prépare les deux scénarios.`
+    );
+    if (!vexBull && !gexBull && cexBull && dexBull) return mk(
+      'NEU-4','NEUTRALITÉ — ATTENDRE LA RÉSOLUTION','neutral','#334155',
+      'FAIBLE','NORMALE','PATIENCE',
+      `VEX-/GEX- amplifient la baisse, CEX+/DEX- soutiennent. Tension non résolue.`,
+      `Raison : forces baissières et haussières en guerre = direction inconnue.`,
+      `Un trader pro PRÉPARE les deux breakouts avec ordres stops dans les deux directions.`
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════
+  // CATCH-ALL
+  // ══════════════════════════════════════════════════════════════════
+  return mk(
+    'NEUTRAL','INDÉCISION — SIGNAUX MIXTES','neutral','#94a3b8',
+    'FAIBLE','NORMALE','PATIENCE',
+    `Les quatre indicateurs ne dégagent pas de consensus. Les forces haussières et baissières s’équilibrent partiellement.`,
+    `Raison : pas de consensus = pas d’edge directionnel = rester à l’écart.`,
+    `Un trader pro RÉDUIT L’EXPOSITION et attend un alignement d’au moins 3/4 signaux.`
+  );
+}
+
+// LEVELS_CONTEXT_v1
+function buildLevelsContext(btcSpot, lvlFlip, lvlHaut, lvlBas, mpStrike, mpDte, mpExpiry, flipDistPct, vexBull, cexBull) {
+  const fmtP = v => v ? '$' + Math.round(v).toLocaleString() : null;
+  const lines = [];
+  const THRESH = 0.015;
+  const near = (a, b) => a && b && Math.abs(a - b) / b < THRESH;
+
+  // ── 1. Glossaire des roles ───────────────────────────────────────────
+  const roles = [];
+  if (lvlFlip)  roles.push('<b style="color:#f59e0b">' + fmtP(lvlFlip) + '</b> = Gamma Flip : niveau o\u00f9 les dealers <i>changent de comportement</i> m\u00e9caniquement');
+  if (mpStrike) roles.push('<b style="color:#3d8eff">' + fmtP(mpStrike) + '</b> = Max Pain (' + (mpExpiry||'') + ') : niveau vers lequel le march\u00e9 <i>gravite</i> \u00e0 l\u2019approche de l\u2019expiration');
+  if (lvlHaut)  roles.push('<b style="color:#22c55e">' + fmtP(lvlHaut) + '</b> = Call wall : <i>r\u00e9sistance</i> o\u00f9 les vendeurs d\u2019options sont concentr\u00e9s');
+  if (lvlBas)   roles.push('<b style="color:#ef4444">' + fmtP(lvlBas) + '</b> = Put wall : <i>support</i> o\u00f9 les acheteurs de puts sont concentr\u00e9s');
+  if (roles.length) lines.push(roles.join('<br>'));
+
+  // ── 2. Convergence triple ────────────────────────────────────────────
+  const allLevels = [lvlFlip, mpStrike, lvlHaut, lvlBas].filter(Boolean);
+  const refPrice  = mpStrike || lvlFlip;
+  const convergingCount = refPrice
+    ? allLevels.filter(l => Math.abs(l - refPrice) / refPrice < THRESH).length
+    : 0;
+
+  const flipNearMp   = near(lvlFlip, mpStrike);
+  const flipNearBas  = near(lvlFlip, lvlBas);
+  const flipNearHaut = near(lvlFlip, lvlHaut);
+  const mpNearBas    = near(mpStrike, lvlBas);
+  const mpNearHaut   = near(mpStrike, lvlHaut);
+  const hautNearBas  = near(lvlHaut, lvlBas);
+
+  if (convergingCount >= 3 && refPrice) {
+    const dteTxt = mpDte === 0 ? 'aujourd\u2019hui' : mpDte === 1 ? 'demain' : mpDte !== null ? 'dans ' + mpDte + 'j' : '';
+    const expTxt = mpExpiry ? ' (' + mpExpiry + ')' : '';
+    lines.push(
+      '&#9888;&#65039; <b>Convergence triple</b> autour de ' + fmtP(refPrice) + ' : Gamma Flip + Max Pain + ' +
+      (flipNearBas ? 'Put wall' : 'Call wall') + ' sont tous dans la m\u00eame zone. ' +
+      (dteTxt ? 'Expiration ' + dteTxt + expTxt + ' \u2014 ' : '') +
+      'le GEX remonte m\u00e9caniquement vers z\u00e9ro car les d\u00e9alers d\u00e9nouent leurs positions avant fixing. ' +
+      'Ce n\u2019est <b>pas un signal bull</b> : c\u2019est le march\u00e9 qui gravite vers son point d\u2019expiration naturel.'
+    );
+  } else if (convergingCount === 2 && refPrice) {
+    const which = flipNearMp   ? 'Gamma Flip et Max Pain' :
+                  flipNearBas  ? 'Gamma Flip et Put wall' :
+                  flipNearHaut ? 'Gamma Flip et Call wall' :
+                  mpNearBas    ? 'Max Pain et Put wall' :
+                  mpNearHaut   ? 'Max Pain et Call wall' :
+                  hautNearBas  ? 'Call wall et Put wall (compression)' : 'deux niveaux cl\u00e9s';
+    lines.push(
+      '&#128204; ' + which + ' convergent en ' + fmtP(refPrice) + '. ' +
+      'Cette confluence renforce l\u2019importance de ce niveau comme pivot \u2014 une cassure franche dans un sens d\u00e9clenchera un mouvement plus ample qu\u2019un niveau isol\u00e9.'
+    );
+  }
+
+  // ── 3. Divergence Flip / Max Pain (de part et d'autre du spot) ───────
+  if (lvlFlip && mpStrike && btcSpot && !near(lvlFlip, mpStrike)) {
+    const flipAbove = lvlFlip > btcSpot;
+    const mpAbove   = mpStrike > btcSpot;
+    if (flipAbove !== mpAbove) {
+      lines.push(
+        '&#128256; <b>Divergence Flip / Max Pain</b> : Gamma Flip (' + fmtP(lvlFlip) + ') et Max Pain (' + fmtP(mpStrike) + ') sont de part et d\u2019autre du spot. ' +
+        'Les dealers subissent une traction dans deux directions oppos\u00e9es \u2014 configuration instable, volatilit\u00e9 \u00e9lev\u00e9e probable.'
+      );
+    } else {
+      const distPct = (Math.abs(lvlFlip - mpStrike) / btcSpot * 100).toFixed(1);
+      lines.push(
+        '&#128204; Gamma Flip (' + fmtP(lvlFlip) + ') et Max Pain (' + fmtP(mpStrike) + ') sont du m\u00eame c\u00f4t\u00e9 mais \u00e9cart\u00e9s de ' + distPct + '%. ' +
+        'Le march\u00e9 a deux aimants successifs \u2014 progression probable par paliers.'
+      );
+    }
+  }
+
+  // ── 4. Position du spot par rapport aux niveaux ──────────────────────
+  if (btcSpot && lvlFlip) {
+    const aboveFlip   = btcSpot > lvlFlip;
+    const distFlipPct = (Math.abs(btcSpot - lvlFlip) / btcSpot * 100).toFixed(1);
+    if (parseFloat(distFlipPct) < 2) {
+      lines.push(
+        '&#128293; BTC (' + fmtP(Math.round(btcSpot)) + ') est \u00e0 seulement ' + distFlipPct + '% du Gamma Flip. ' +
+        (aboveFlip
+          ? 'Tant que le spot tient <b>au-dessus</b> de ' + fmtP(lvlFlip) + ', le GEX reste stabilisateur. ' +
+            'Une cl\u00f4ture <b>sous</b> ' + fmtP(lvlFlip) + ' active le r\u00e9gime amplificateur \u2014 les dealers vendent m\u00e9caniquement.'
+          : 'Le spot est <b>en dessous</b> du Flip. Les dealers sont en mode amplificateur. ' +
+            'Un retour <b>au-dessus</b> de ' + fmtP(lvlFlip) + ' inverserait le r\u00e9gime et d\u00e9clencherait des rachats m\u00e9caniques.')
+      );
+    } else if (parseFloat(distFlipPct) < 5) {
+      lines.push(
+        '&#128204; BTC (' + fmtP(Math.round(btcSpot)) + ') est \u00e0 ' + distFlipPct + '% du Gamma Flip ' + fmtP(lvlFlip) + '. ' +
+        (aboveFlip
+          ? 'Zone de vigilance : le r\u00e9gime stabilisateur tient, mais toute pouss\u00e9e vendeuse br\u00e8ve pourrait inverser la m\u00e9canique des dealers.'
+          : 'Zone de vigilance : le r\u00e9gime amplificateur actif, mais un retour rapide au-dessus du Flip inverserait la m\u00e9canique.')
+      );
+    }
+  }
+
+  // ── 5. Spot entre Flip et Call wall (pocket haussier) ────────────────
+  if (btcSpot && lvlFlip && lvlHaut && btcSpot > lvlFlip && btcSpot < lvlHaut) {
+    const roomPct = ((lvlHaut - btcSpot) / btcSpot * 100).toFixed(1);
+    lines.push(
+      '&#128204; BTC est dans la <b>pocket haussier</b> : au-dessus du Flip (' + fmtP(lvlFlip) + ') et sous la r\u00e9sistance (' + fmtP(lvlHaut) + '). ' +
+      'Espace libre de ' + roomPct + '% avant le Call wall \u2014 les dealers sont stabilisateurs dans cette zone.'
+    );
+  }
+
+  // ── 6. Spot entre Put wall et Flip (pocket baissier) ─────────────────
+  if (btcSpot && lvlBas && lvlFlip && btcSpot < lvlFlip && btcSpot > lvlBas) {
+    const roomPct = ((btcSpot - lvlBas) / btcSpot * 100).toFixed(1);
+    lines.push(
+      '&#9888;&#65039; BTC est dans la <b>zone de pression</b> : sous le Flip (' + fmtP(lvlFlip) + ') et au-dessus du support (' + fmtP(lvlBas) + '). ' +
+      'Coussin de ' + roomPct + '% avant le Put wall \u2014 les dealers amplifient les mouvements dans cette zone.'
+    );
+  }
+
+  // ── 7. Spot sous le Put wall (territoire bearish profond) ─────────────
+  if (btcSpot && lvlBas && btcSpot < lvlBas) {
+    lines.push(
+      '&#9888;&#65039; BTC (' + fmtP(Math.round(btcSpot)) + ') est <b>sous le Put wall</b> ' + fmtP(lvlBas) + '. ' +
+      'Zone de d\u00e9livrance des puts \u2014 les vendeurs de puts rachètent des options, ce qui peut cr\u00e9er un rebond technique brutal m\u00eame en tendance baissière.'
+    );
+  }
+
+  // ── 8. Spot au-dessus du Call wall (territoire breakout) ─────────────
+  if (btcSpot && lvlHaut && btcSpot > lvlHaut) {
+    lines.push(
+      '&#128204; BTC (' + fmtP(Math.round(btcSpot)) + ') est <b>au-dessus du Call wall</b> ' + fmtP(lvlHaut) + '. ' +
+      'Territoire de gamma squeeze : les vendeurs de calls rachètent pour se couvrir, amplifiant la hausse m\u00e9caniquement.'
+    );
+  }
+
+  // ── 9. Max Pain entre Flip et spot ───────────────────────────────────
+  if (btcSpot && lvlFlip && mpStrike) {
+    const mpBetweenFlipSpot = (lvlFlip < btcSpot && mpStrike > lvlFlip && mpStrike < btcSpot) ||
+                               (lvlFlip > btcSpot && mpStrike < lvlFlip && mpStrike > btcSpot);
+    if (mpBetweenFlipSpot) {
+      lines.push(
+        '&#128204; Max Pain (' + fmtP(mpStrike) + ') se trouve <b>entre le Gamma Flip et le spot</b>. ' +
+        'Double gravit\u00e9 : le march\u00e9 est attir\u00e9 vers le Max Pain tout en \u00e9tant retenu par la m\u00e9canique du Flip. ' +
+        'Oscillation probable autour de ces deux niveaux.'
+      );
+    }
+  }
+
+  // ── 10. Urgence expiration ─────────────────────────────────────────
+  if (mpDte !== null && mpDte <= 2 && mpStrike) {
+    const urgTxt = mpDte === 0 ? 'AUJOURD\u2019HUI' : mpDte === 1 ? 'DEMAIN' : 'dans 2 jours';
+    const expTxt = mpExpiry ? ' (' + mpExpiry + ')' : '';
+    lines.push(
+      '&#9200; <b>Expiration ' + urgTxt + expTxt + '</b> : le GEX se r\u00e9sorbera m\u00e9caniquement vers z\u00e9ro apr\u00e8s le fixing. ' +
+      'Le signal GEX actuel est temporaire \u2014 ne pas le confondre avec un changement de tendance de fond.'
+    );
+  } else if (mpDte !== null && mpDte <= 7 && mpStrike) {
+    lines.push(
+      '&#9200; Expiration dans ' + mpDte + ' jours' + (mpExpiry ? ' (' + mpExpiry + ')' : '') + ' : ' +
+      'le GEX commence \u00e0 se r\u00e9sorber. La gravit\u00e9 vers le Max Pain ' + fmtP(mpStrike) + ' s\u2019intensifie progressivement.'
+    );
+  }
+
+  // ── 11. Rappel VEX/CEX si GEX remonte mais reste baissier structurel ──
+  if (!vexBull && !cexBull) {
+    lines.push(
+      '&#9888;&#65039; M\u00eame si le GEX remonte, VEX et CEX restent n\u00e9gatifs : les dealers sont structurellement vendeurs de BTC sur toute hausse de volatilit\u00e9 ou \u00e9coulement du temps. Le rebond du GEX est m\u00e9canique, pas directionnel.'
+    );
+  }
+
+  // ── 12. VEX/CEX haussiers + GEX amplificateur (tension) ──────────────
+  if (vexBull && cexBull && lvlFlip && btcSpot && btcSpot < lvlFlip) {
+    lines.push(
+      '&#128256; <b>Tension structurelle</b> : VEX et CEX haussiers mais le spot est <b>sous le Gamma Flip</b>. ' +
+      'Les options positionnent pour une hausse mais les dealers amplifient les baisses \u2014 premier signal d\u2019un potentiel retournement si le Flip est reconquis.'
+    );
+  }
+
+  return lines.length ? lines.join('<br><br>') : null;
+}
+
+async function loadRegimeSummary(signal) {
+  const el = document.getElementById('regime-summary-content');
+  const dot = document.getElementById('regime-dot-indicator');
+  try {
+    const [vcData, mopiData, vcHistory, narrData] = await Promise.all([
+      apiFetch('/api/vex_cex', signal),
+      apiFetch('/api/mopi_vs_btc?period=7d', signal),
+      apiFetch('/api/vex_cex_history?period=7d', signal),
+      apiFetch('/api/narrative', signal),   // for niveau_haut / niveau_bas / btc_price
+    ]);
+
+    if (!vcData || vcData.error) throw new Error('vex_cex indisponible');
+
+    // ── Helper: compute trend from array of numbers (5 last vs 5 prev) ──
+    function calcTrend(arr, thresh) {
+      if (!arr || arr.length < 10) return 'flat';
+      const n = arr.length;
+      const recent = arr.slice(n - 5).reduce((a, b) => a + b, 0) / 5;
+      const prev   = arr.slice(n - 10, n - 5).reduce((a, b) => a + b, 0) / 5;
+      const delta  = recent - prev;
+      const t = Math.abs(prev) * 0.01 + thresh;
+      return delta > t ? 'up' : delta < -t ? 'down' : 'flat';
+    }
+
+    // ── GEX / DEX trends from mopi_vs_btc ──────────────────────────
+    let gexTrend = 'flat', dexTrend = 'flat';
+    let gexLast = 0, dexLast = 0;
+    if (mopiData && mopiData.gex && mopiData.gex.length >= 10) {
+      gexTrend = calcTrend(mopiData.gex, 1e8);
+      dexTrend = calcTrend(mopiData.dex, 100);
+      gexLast  = mopiData.gex[mopiData.gex.length - 1];
+      dexLast  = mopiData.dex[mopiData.dex.length - 1];
+    }
+
+    // ── VEX / CEX trends from vex_cex_history ──────────────────────
+    let vexTrend = 'flat', cexTrend = 'flat';
+    if (vcHistory && vcHistory.points && vcHistory.points.length >= 10) {
+      const pts = vcHistory.points;
+      const vexArr = pts.map(p => p.vex);
+      const cexArr = pts.map(p => p.cex);
+      vexTrend = calcTrend(vexArr, 1e6);   // threshold: 1M
+      cexTrend = calcTrend(cexArr, 5e5);   // threshold: 0.5M
+    }
+
+    const regime = classifyRegimeFull({
+      vex: vcData.vex_total,
+      cex: vcData.cex_total,
+      gex: gexLast,
+      dex: dexLast,
+      vexTrend,
+      cexTrend,
+      gexTrend,
+      dexTrend,
+      flipDistPct: vcData.gamma_flip_dist_pct,
+      flipLevel:   vcData.gamma_flip          // absolute $ level
+    });
+
+    // ── Key levels from narrative ────────────────────────────────────
+    const btcSpot    = (narrData && narrData.btc_price)   || vcData.btc_price || null;
+    const lvlFlip    = vcData.gamma_flip                  || null;
+    const lvlHaut    = (narrData && narrData.niveau_haut) || null;
+    const lvlBas     = (narrData && narrData.niveau_bas)  || null;
+    const lvlHautLbl = (narrData && narrData.niveau_haut_label) || null;
+    const lvlBasLbl  = (narrData && narrData.niveau_bas_label)  || null;
+    // Max Pain  /* MAXPAIN_v1 */
+    const mpData     = (narrData && narrData.max_pain_display) || null;
+    const mpStrike   = mpData ? mpData.strike  : null;
+    const mpExpiry   = mpData ? mpData.expiry  : null;  // e.g. "28JUN26"
+    const mpDte      = mpData ? mpData.dte     : null;  // days to expiry
+    const mpLabel    = mpData ? mpData.label   : null;
+    const fmtP = v => v ? `$${Math.round(v).toLocaleString()}` : '—';
+
+    // Store globally for loadVexCex() reuse
+    window._lastRegime = regime;
+    window._lastRegimeGexLast = gexLast;
+    window._lastRegimeDexLast = dexLast;
+
+    // Update dot color
+    if (dot) dot.style.background = regime.dot;
+
+    const trendArrow = t => t === 'up' ? '↑' : t === 'down' ? '↓' : '→';
+
+    const signalMinis = regime.signals.map(s => {
+      const color = s.bull ? '#22c55e' : '#ef4444';
+      let trendHtml = '';
+      if (!s.trendFlat) {
+        const trendColor = (s.bull && s.trendUp) || (!s.bull && !s.trendUp) ? '#22c55e' : '#f87171';
+        trendHtml = `<div class="regime-signal-mini-trend" style="color:${trendColor}">${s.trendUp ? '↑' : '↓'} ${s.trendUp ? 'hausse' : 'baisse'}</div>`;
+      }
+      return `<div class="regime-signal-mini">
+        <div class="regime-signal-mini-name">${s.name}</div>
+        <div class="regime-signal-mini-val" style="color:${color}">${s.formatted}</div>
+        ${trendHtml}
+      </div>`;
+    }).join('');
+
+    const urgencyColor = regime.urgency === 'CRITIQUE' ? '#ef4444' :
+                         regime.urgency === 'ÉLEVÉE'   ? '#f59e0b' : '#64748b';
+    const confColor    = regime.confidence === 'ÉLEVÉE'  ? '#22c55e' :
+                         regime.confidence === 'MODÉRÉE' ? '#f59e0b' : '#94a3b8';
+
+    // Bias color & icon
+    const biasColor = {
+      'LONG':     '#22c55e',
+      'SHORT':    '#ef4444',
+      'STRANGLE': '#a855f7',
+      'PATIENCE': '#64748b',
+    }[regime.bias] || '#94a3b8';
+    const biasIcon = {
+      'LONG':     '▲ LONG',
+      'SHORT':    '▼ SHORT',
+      'STRANGLE': '⟺ STRANGLE',
+      'PATIENCE': '⏸ ATTENDRE',
+    }[regime.bias] || regime.bias;
+
+    el.innerHTML = `
+      <div class="regime-top-hero">
+        <div class="regime-top-badge" style="color:${regime.color};border-color:${regime.color}55;background:${regime.color}11">
+          <div class="regime-top-dot" style="background:${regime.dot}"></div>
+          ${regime.label}
+        </div>
+        <span class="regime-top-urgency" style="color:${urgencyColor};border-color:${urgencyColor}55;background:${urgencyColor}11">
+          URGENCE : ${regime.urgency}
+        </span>
+        <span class="regime-top-urgency" style="color:${confColor};border-color:${confColor}55;background:${confColor}11">
+          CONFIANCE : ${regime.confidence}
+        </span>
+        <span style="font-size:11px;color:var(--muted);margin-left:auto">
+          VEX ${trendArrow(vexTrend)} · CEX ${trendArrow(cexTrend)} · GEX ${trendArrow(gexTrend)} · DEX ${trendArrow(dexTrend)}
+        </span>
+      </div>
+
+      <div class="regime-signals-grid">${signalMinis}</div>
+
+      <!-- LEVELS BLOCK_v1 -->
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:14px">
+
+        ${lvlFlip ? `
+        <div style="grid-column:1/-1;background:#f59e0b11;border:1.5px solid #f59e0b55;border-radius:10px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;gap:8px">
+          <div>
+            <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#f59e0b;margin-bottom:3px">⚡ Gamma Flip — déclencheur mécanique dealers</div>
+            <div style="font-size:16px;font-weight:900;color:#f59e0b;font-variant-numeric:tabular-nums">${fmtP(lvlFlip)}</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:11px;font-weight:700;color:${vcData.gamma_flip_dist_pct < 0 ? '#ef4444' : '#22c55e'}">${vcData.gamma_flip_dist_pct !== null ? (vcData.gamma_flip_dist_pct >= 0 ? '+' : '') + vcData.gamma_flip_dist_pct.toFixed(1) + '% du spot' : ''}</div>
+            <div style="font-size:10px;color:#94a3b8;margin-top:2px">${vcData.gamma_flip_side === 'below' ? '▼ En-dessous du spot' : '▲ Au-dessus du spot'}</div>
+          </div>
+        </div>` : ''}
+
+        ${lvlHaut ? `
+        <div style="background:#22c55e0d;border:1px solid #22c55e33;border-radius:10px;padding:10px 12px">
+          <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#22c55e;margin-bottom:3px">▲ Résistance options</div>
+          <div style="font-size:15px;font-weight:800;color:#22c55e;font-variant-numeric:tabular-nums">${fmtP(lvlHaut)}</div>
+          <div style="font-size:10px;color:#64748b;margin-top:2px">${lvlHautLbl || ''}</div>
+        </div>` : ''}
+
+        ${lvlBas ? `
+        <div style="background:#ef44440d;border:1px solid #ef444433;border-radius:10px;padding:10px 12px">
+          <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#ef4444;margin-bottom:3px">▼ Support options</div>
+          <div style="font-size:15px;font-weight:800;color:#ef4444;font-variant-numeric:tabular-nums">${fmtP(lvlBas)}</div>
+          <div style="font-size:10px;color:#64748b;margin-top:2px">${lvlBasLbl || ''}</div>
+        </div>` : ''}
+
+        ${mpStrike ? `
+        <div style="grid-column:1/-1;background:#3d8eff11;border:1.5px solid #3d8eff44;border-radius:10px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;gap:8px">
+          <div>
+            <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#3d8eff;margin-bottom:3px">🎯 Max Pain — gravité expiration</div>
+            <div style="font-size:16px;font-weight:900;color:#3d8eff;font-variant-numeric:tabular-nums">${fmtP(mpStrike)}</div>
+            <div style="font-size:10px;color:#64748b;margin-top:2px">${mpLabel || ''}</div>
+          </div>
+          <div style="text-align:right;flex-shrink:0">
+            <div style="font-size:13px;font-weight:800;color:#3d8eff">${mpExpiry || ''}</div>
+            <div style="font-size:11px;color:#64748b;margin-top:2px">${mpDte !== null ? (mpDte === 0 ? 'Expiration aujourd’hui' : mpDte === 1 ? 'J−1' : 'J−' + mpDte) : ''}</div>
+          </div>
+        </div>` : ''}
+
+      </div>
+
+      ${(() => {
+        const ctx = buildLevelsContext(
+          btcSpot, lvlFlip, lvlHaut, lvlBas,
+          mpStrike, mpDte, mpExpiry,
+          vcData.gamma_flip_dist_pct,
+          regime.signals[0].bull,
+          regime.signals[1].bull
+        );
+        return ctx
+          ? `<div style="font-size:12px;color:#c9d1e0;line-height:1.85;margin-bottom:14px;padding:14px 16px;background:rgba(255,255,255,0.03);border-radius:10px;border-left:3px solid #475569">${ctx}</div>`
+          : '';
+      })()}
+
+      <div class="regime-plain-text">${regime.plain}</div>
+
+      <div style="border:2px solid ${biasColor};border-radius:14px;padding:16px 18px;margin-bottom:14px;background:${biasColor}0d">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+          <div style="font-size:20px;font-weight:900;color:${biasColor};letter-spacing:.5px">${biasIcon}</div>
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:${biasColor};opacity:.8">VERDICT TRADER</div>
+        </div>
+        <div style="font-size:13px;color:#e2e8f0;line-height:1.75;margin-bottom:8px">${regime.raison}</div>
+        <div style="font-size:12px;color:#94a3b8;line-height:1.65;border-top:1px solid ${biasColor}33;padding-top:8px;margin-top:4px">${regime.pro}</div>
+      </div>
+
+      <div class="regime-advice-bar" style="border-left-color:${regime.color}">
+        <div class="regime-advice-label" style="color:${regime.color}">Contexte structurel</div>
+        <div class="regime-advice-text">${regime.plain}</div>
+      </div>`;
+  } catch (e) {
+    if (el) el.innerHTML = `<div class="error-state"><div class="error-icon">⚠</div>Régime indisponible : ${e.message}</div>`;
+  }
+}
+
+//  MODULE VEX/CEX: VANNA & CHARM EXPOSURE
+// ══════════════════════════════════════════════════
+
+/**
+ * Combine GEX + DEX + VEX + CEX signs to classify market regime.
+ * Returns { label, color, dot, plain, advice }
+ *
+ * Matrix (simplified — all 4 bearish = compression or explosive):
+ *   VEX > 0 & CEX > 0  → dealers BUY on IV up AND on time → STABILISATEUR / ralentissement
+ *   VEX < 0 & CEX < 0  → dealers SELL on IV up AND on time → AMPLIFICATEUR / accélération
+ *   VEX > 0 & CEX < 0  (or inverse) → forces opposées → COMPRESSION
+ *   Abs values big + near flip → EXPLOSIF
+ */
+function classifyRegime(vex, cex, gexTotal, dexTotal, flipDistPct) {
+  const vexBull = vex > 0;
+  const cexBull = cex > 0;
+  const gexBull = gexTotal >= 0;
+  const dexBull = dexTotal >= 0;
+
+  const bigVex = Math.abs(vex) > 20e6;
+  const bigCex = Math.abs(cex) > 10e6;
+
+  // Near flip (within 2%) → explosive potential regardless of direction
+  const nearFlip = flipDistPct !== null && Math.abs(flipDistPct) <= 2.0;
+
+  // Count bullish signals
+  const bullCount = [vexBull, cexBull, gexBull, dexBull].filter(Boolean).length;
+
+  if (nearFlip && (bigVex || bigCex)) {
+    return {
+      label: 'PRÉPARATION EXPLOSIVE',
+      color: '#f59e0b',
+      dot: '#f59e0b',
+      plain: `Le spot BTC se situe à moins de 2 % du Gamma Flip, avec un VEX et/ou CEX de grande amplitude. Les dealers sont exposés à un repositionnement brutal : un franchissement du flip déclencherait une cascade d'achats ou de ventes de couverture, amplifiant fortement le mouvement initial. C'est la configuration la plus explosive de toutes.`,
+      advice: `Attention aux breakouts : même un faible catalyseur peut déclencher un mouvement extrême. Les options ATM sont très chères, mais les spreads directionnels restent pertinents.`
+    };
+  }
+
+  if (bullCount === 4) {
+    return {
+      label: 'RALENTISSEMENT HAUSSIER',
+      color: '#22c55e',
+      dot: '#22c55e',
+      plain: `Les quatre indicateurs de flux dealers sont alignés à la hausse. VEX positif : une hausse de volatilité pousse les dealers à acheter du BTC. CEX positif : le temps qui passe les force aussi à acheter. GEX et DEX haussiers : ils absorbent les ventes et amortissent les baisses. Le marché est en mode stabilisation — les corrections sont limitées.`,
+      advice: `Privilégier les stratégies vendeuses de volatilité (short puts, iron condors). Les dealers joueront le rôle d'amortisseur. Éviter les longs straddles.`
+    };
+  }
+
+  if (bullCount === 0) {
+    return {
+      label: 'ACCÉLÉRATION BAISSIÈRE',
+      color: '#ef4444',
+      dot: '#ef4444',
+      plain: `Les quatre indicateurs sont négatifs. VEX négatif : toute hausse de volatilité oblige les dealers à vendre du BTC. CEX négatif : le temps qui passe aggrave la pression vendeuse. GEX et DEX négatifs : les dealers amplifient chaque mouvement au lieu de l'amortir. Le marché est en mode amplificateur — les baisses peuvent s'emballer.`,
+      advice: `Configuration idéale pour les stratégies long volatilité (long puts, long straddles). Les corrections peuvent être profondes et rapides. Gérer les stops serrément.`
+    };
+  }
+
+  if (bullCount >= 3) {
+    return {
+      label: 'RALENTISSEMENT MODÉRÉ',
+      color: '#4ade80',
+      dot: '#4ade80',
+      plain: `La majorité des indicateurs de flux pointent vers un soutien des dealers, mais un signal diverge. Le marché est globalement stabilisant, mais avec quelques tensions internes. Les corrections restent contenues, mais le rebond automatique est moins garanti.`,
+      advice: `Neutre légèrement haussier. Les stratégies de range (iron condors, short strangles) fonctionnent bien. Être vigilant sur le signal qui diverge.`
+    };
+  }
+
+  if (bullCount <= 1) {
+    return {
+      label: 'ACCÉLÉRATION MODÉRÉE',
+      color: '#f87171',
+      dot: '#f87171',
+      plain: `La majorité des indicateurs signalent une pression vendeuse de la part des dealers. Les forces d'amplification dominent, mais pas unanimement. Le marché peut s'emballer à la baisse, mais un signal positif peut servir de frein temporaire.`,
+      advice: `Prudent côté acheteur. Les rallyes risquent d'être vendus. Privilégier la protection par des puts ou une réduction d'exposition.`
+    };
+  }
+
+  // bullCount === 2 → balanced / compression
+  const vexCexOpposite = vexBull !== cexBull;
+  if (vexCexOpposite) {
+    return {
+      label: 'COMPRESSION — BREAKOUT IMMINENT',
+      color: '#a855f7',
+      dot: '#a855f7',
+      plain: `VEX et CEX envoient des signaux opposés : la volatilité implicite et le temps tirent les dealers dans des directions contraires. Cette tension interne comprime le marché dans une fourchette étroite, accumulant de l'énergie. Le breakout, quand il arrive, est souvent violent et unilatéral.`,
+      advice: `Excellent timing pour les stratégies long volatilité directionnelles (straddles, strangles longs). Les options bon marché par rapport à la volatilité réalisée représentent une opportunité. Ne pas être trop directionnel.`
+    };
+  }
+
+  return {
+    label: 'INDÉCISION — SIGNAUX MIXTES',
+    color: '#94a3b8',
+    dot: '#94a3b8',
+    plain: `Les indicateurs GEX, DEX, VEX et CEX ne dégagent pas de consensus clair. Les forces haussières et baissières s'équilibrent. Le marché manque de direction et les dealers n'ont pas de biais dominant. Ce type de configuration précède souvent soit une consolidation prolongée, soit une soudaine prise de direction.`,
+    advice: `Rester neutre ou réduire l'exposition. Attendre un alignement des signaux avant de prendre une position directionnelle forte.`
+  };
+}
+
+async function loadVexCex(signal) {
+  const data = await apiFetch('/api/vex_cex', signal);
+  const el = document.getElementById('vex-cex-content');
+  if (!data || data.error) {
+    el.innerHTML = `<div class="error-state"><div class="error-icon">⚠</div>Données VEX/CEX indisponibles</div>`;
+    return;
+  }
+
+  const vexColor = data.vex_total >= 0 ? 'var(--green)' : 'var(--red)';
+  const cexColor = data.cex_total >= 0 ? 'var(--green)' : 'var(--red)';
+  const flipColor = data.gamma_flip_side === 'below' ? 'var(--red)' : 'var(--green)';
+  const flipDist = data.gamma_flip_dist_pct !== null
+    ? (data.gamma_flip_dist_pct > 0 ? '+' : '') + data.gamma_flip_dist_pct.toFixed(1) + '%'
+    : '—';
+
+  const vexStrikes = (data.vex_by_strike || []).map(s =>
+    `<span class="vex-cex-chip" title="VEX: ${s.vex >= 0 ? '+' : ''}${(s.vex/1e6).toFixed(1)}M">$${Math.round(s.strike).toLocaleString()}</span>`
+  ).join('');
+  const cexStrikes = (data.cex_by_strike || []).map(s =>
+    `<span class="vex-cex-chip" title="CEX: ${s.cex >= 0 ? '+' : ''}${(s.cex/1e6).toFixed(1)}M">$${Math.round(s.strike).toLocaleString()}</span>`
+  ).join('');
+
+  // Get GEX/DEX from the already-loaded mopi data if available, else from context
+  // We use stored values from MODULE 8/9 or fallback to 0 for regime (we classify from vex/cex primarily)
+  // For a better regime we'll use gex from the context module which is already in the DOM
+  const gexEl = document.getElementById('ctx-gex-val');
+  const dexEl = document.getElementById('ctx-dex-val');
+  const gexRaw = gexEl ? parseFloat(gexEl.dataset.raw || '0') : 0;
+  const dexRaw = dexEl ? parseFloat(dexEl.dataset.raw || '0') : 0;
+
+  // Reuse regime computed by loadRegimeSummary() if available (avoids double fetch)
+  const regime = window._lastRegime || classifyRegime(data.vex_total, data.cex_total, gexRaw, dexRaw, data.gamma_flip_dist_pct);
+
+  const signalRows = [
+    { name: 'VEX', val: data.vex_total_fmt, bull: data.vex_total >= 0 },
+    { name: 'CEX', val: data.cex_total_fmt, bull: data.cex_total >= 0 },
+    { name: 'Gamma Flip', val: data.gamma_flip ? `$${Math.round(data.gamma_flip).toLocaleString()}` : '—', bull: data.gamma_flip_side !== 'below' },
+    { name: 'Régime GEX', val: data.gamma_flip_regime || '—', bull: data.gamma_flip_regime !== 'AMPLIFICATEUR' },
+  ].map(s => `
+    <div class="regime-signal-item">
+      <span class="regime-signal-name">${s.name}</span>
+      <span class="regime-signal-val" style="color:${s.bull ? 'var(--green)' : 'var(--red)'}">${s.val}</span>
+    </div>`).join('');
+
+  el.innerHTML = `
+    <div class="vex-cex-grid">
+      <div class="vex-cex-box">
+        <div class="vex-cex-box-label">VEX — Vanna Exposure</div>
+        <div class="vex-cex-value" style="color:${vexColor}">${data.vex_total_fmt}</div>
+        <div class="vex-cex-direction" style="color:${vexColor}">${data.vex_direction?.replace(/_/g, ' ') || '—'}</div>
+        <div class="vex-cex-interp">${data.vex_interpretation || ''}</div>
+        <div class="vex-cex-strikes">${vexStrikes}</div>
+      </div>
+      <div class="vex-cex-box">
+        <div class="vex-cex-box-label">CEX — Charm Exposure</div>
+        <div class="vex-cex-value" style="color:${cexColor}">${data.cex_total_fmt}</div>
+        <div class="vex-cex-direction" style="color:${cexColor}">${data.cex_direction?.replace(/_/g, ' ') || '—'}</div>
+        <div class="vex-cex-interp">${data.cex_interpretation || ''}</div>
+        <div class="vex-cex-strikes">${cexStrikes}</div>
+      </div>
+    </div>
+
+    <div class="gamma-flip-box">
+      <div class="gamma-flip-label">Gamma Flip</div>
+      ${data.gamma_flip ? `
+        <div class="gamma-flip-price" style="color:${flipColor}">
+          $${Math.round(data.gamma_flip).toLocaleString()}
+          <span style="font-size:13px;font-weight:600;margin-left:8px;color:${flipColor}">${flipDist} du spot</span>
+        </div>
+        <div class="gamma-flip-dist">
+          Régime GEX : <span style="color:${flipColor};font-weight:700">${data.gamma_flip_regime || '—'}</span>
+          &nbsp;·&nbsp; <span style="font-weight:600">${data.gamma_flip_side === 'below' ? '▼ En-dessous du spot' : '▲ Au-dessus du spot'}</span>
+        </div>
+        <div class="gamma-flip-interp">${data.gamma_flip_interpretation || ''}</div>
+      ` : `<div style="color:var(--muted);font-size:13px;">Non détecté dans la zone actuelle</div>`}
+    </div>
+
+    <div class="vc-history-wrap">
+      <div class="vc-period-row">
+        <button class="vc-period-btn active" onclick="setVcPeriod('7d',this)">7J</button>
+        <button class="vc-period-btn" onclick="setVcPeriod('14d',this)">14J</button>
+        <button class="vc-period-btn" onclick="setVcPeriod('30d',this)">30J</button>
+      </div>
+      <div class="vc-chart-block">
+        <div class="vc-chart-header">
+          <span class="vc-chart-label">VEX — Historique</span>
+          <span class="vc-chart-current" id="vc-vex-cur" style="color:${vexColor}">${data.vex_total_fmt}</span>
+        </div>
+        <div class="vc-canvas-wrap"><canvas id="vc-vex-canvas"></canvas></div>
+      </div>
+      <div class="vc-chart-block">
+        <div class="vc-chart-header">
+          <span class="vc-chart-label">CEX — Historique</span>
+          <span class="vc-chart-current" id="vc-cex-cur" style="color:${cexColor}">${data.cex_total_fmt}</span>
+        </div>
+        <div class="vc-canvas-wrap"><canvas id="vc-cex-canvas"></canvas></div>
+      </div>
+    </div>
+
+    <div class="regime-block">
+      <div class="regime-header">
+        <div class="regime-title">Diagnostic de régime</div>
+        <div class="regime-badge" style="color:${regime.color};border-color:${regime.color}33">
+          <span class="regime-dot" style="background:${regime.dot}"></span>
+          ${regime.label}
+        </div>
+      </div>
+      <div class="regime-plain">${regime.plain}</div>
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:8px;">Signaux composites</div>
+      <div class="regime-signals">${signalRows}</div>
+      ${regime.advice ? `<div style="margin-top:12px;padding:10px 14px;background:rgba(255,255,255,0.03);border-radius:10px;border-left:3px solid ${regime.color}40">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:${regime.color};margin-bottom:5px;">Implication pratique</div>
+        <div style="font-size:12px;color:#b0bec5;line-height:1.6;">${regime.advice}</div>
+      </div>` : ''}
+    </div>
+  `;
+}
+
+// ── VEX/CEX History charts ───────────────────────────────────────────────────
+let _vcPeriod = '7d';
+let _vcPeriodBtn = null;
+
+function setVcPeriod(p, btn) {
+  _vcPeriod = p;
+  document.querySelectorAll('.vc-period-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  drawVcCharts(_vcPeriod);
+}
+
+function _drawVcLine(canvasId, points, color) {
+  const el = document.getElementById(canvasId);
+  if (!el || !points.length) return;
+  const dpr = window.devicePixelRatio || 1;
+  const rect = el.parentElement.getBoundingClientRect();
+  const W = rect.width || 300;
+  const H = rect.height || 72;
+  el.width  = W * dpr;
+  el.height = H * dpr;
+  el.style.width  = W + 'px';
+  el.style.height = H + 'px';
+  const ctx = el.getContext('2d');
+  ctx.scale(dpr, dpr);
+
+  const vals = points.map(p => p.v);
+  const min  = Math.min(...vals);
+  const max  = Math.max(...vals);
+  const range = max - min || 1;
+
+  const pad = { t: 6, b: 6, l: 4, r: 4 };
+  const w = W - pad.l - pad.r;
+  const h = H - pad.t - pad.b;
+  const n = points.length;
+
+  const x = i => pad.l + (i / (n - 1)) * w;
+  const y = v => pad.t + h - ((v - min) / range) * h;
+
+  // Zero line
+  const y0 = y(0);
+  ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([3, 3]);
+  ctx.beginPath(); ctx.moveTo(pad.l, y0); ctx.lineTo(pad.l + w, y0); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Gradient fill
+  const grad = ctx.createLinearGradient(0, pad.t, 0, pad.t + h);
+  grad.addColorStop(0, color + '40');
+  grad.addColorStop(1, color + '05');
+  ctx.beginPath();
+  ctx.moveTo(x(0), y(vals[0]));
+  for (let i = 1; i < n; i++) ctx.lineTo(x(i), y(vals[i]));
+  ctx.lineTo(x(n - 1), pad.t + h);
+  ctx.lineTo(x(0), pad.t + h);
+  ctx.closePath();
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  // Line
+  ctx.beginPath();
+  ctx.moveTo(x(0), y(vals[0]));
+  for (let i = 1; i < n; i++) ctx.lineTo(x(i), y(vals[i]));
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // Last dot
+  const lx = x(n - 1), ly = y(vals[n - 1]);
+  ctx.beginPath();
+  ctx.arc(lx, ly, 3, 0, 2 * Math.PI);
+  ctx.fillStyle = color;
+  ctx.fill();
+}
+
+async function drawVcCharts(period, signal) {
+  const data = await apiFetch('/api/vex_cex_history?period=' + period, signal);
+  if (!data || !data.points || data.points.length < 2) {
+    // Show "pas encore d'historique" message on canvases
+    ['vc-vex-canvas', 'vc-cex-canvas'].forEach(id => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const dpr = window.devicePixelRatio || 1;
+      const rect = el.parentElement.getBoundingClientRect();
+      el.width = (rect.width || 300) * dpr;
+      el.height = (rect.height || 72) * dpr;
+      el.style.width = (rect.width || 300) + 'px';
+      el.style.height = (rect.height || 72) + 'px';
+      const ctx = el.getContext('2d');
+      ctx.scale(dpr, dpr);
+      ctx.fillStyle = 'rgba(148,163,184,0.4)';
+      ctx.font = '11px system-ui';
+      ctx.textAlign = 'center';
+      ctx.fillText('Historique en cours de collecte…', (rect.width || 300) / 2, (rect.height || 72) / 2 + 4);
+    });
+    return;
+  }
+
+  const vexPts = data.points.map(p => ({ ts: p.ts, v: p.vex }));
+  const cexPts = data.points.map(p => ({ ts: p.ts, v: p.cex }));
+
+  const lastVex = vexPts[vexPts.length - 1]?.v || 0;
+  const lastCex = cexPts[cexPts.length - 1]?.v || 0;
+  const vexColor = lastVex >= 0 ? '#22c55e' : '#ef4444';
+  const cexColor = lastCex >= 0 ? '#22c55e' : '#ef4444';
+
+  const fmt = v => {
+    const a = Math.abs(v);
+    return (v < 0 ? '-' : '+') + (a >= 1e9 ? (a/1e9).toFixed(2)+'B' : a >= 1e6 ? (a/1e6).toFixed(1)+'M' : Math.round(a).toLocaleString());
+  };
+
+  const vexCurEl = document.getElementById('vc-vex-cur');
+  const cexCurEl = document.getElementById('vc-cex-cur');
+  if (vexCurEl) { vexCurEl.textContent = fmt(lastVex); vexCurEl.style.color = vexColor; }
+  if (cexCurEl) { cexCurEl.textContent = fmt(lastCex); cexCurEl.style.color = cexColor; }
+
+  requestAnimationFrame(() => {
+    _drawVcLine('vc-vex-canvas', vexPts, vexColor);
+    _drawVcLine('vc-cex-canvas', cexPts, cexColor);
+  });
+}
+
+let _loadSeq = 0;
+let _loadController = null;
+
+async function loadAllData() {
+  // Cancel any in-flight request set
+  if (_loadController) _loadController.abort();
+  const seq = ++_loadSeq;
+  _loadController = new AbortController();
+  const { signal } = _loadController;
+
+  await loadBtcPrice();
+  if (seq !== _loadSeq) return;
+
+  // Load regime summary first (top card, computes gexTrend/dexTrend, stores window._lastRegime)
+  await loadRegimeSummary(signal);
+  if (seq !== _loadSeq) return;
+
+  // Load signal first (needed for levels)
+  const decisionData = await loadSignal(signal);
+  if (seq !== _loadSeq) return;
+
+  // Load rest in parallel — allSettled so one failure does not block others
+  const results = await Promise.allSettled([
+    loadLevels(decisionData, signal),
+    loadProbabilities(signal),
+    loadContext(signal),
+    loadVolWeather(signal),
+    loadGexDex(signal),
+    loadMopiVsBtc(signal),
+    loadNarrative(signal),
+    loadModel(signal),
+    loadVexCex(signal),
+  ]);
+
+  if (seq !== _loadSeq) return;
+
+  // Draw VEX/CEX history charts after card content is rendered
+  drawVcCharts(_vcPeriod);
+
+  // Show stale indicator for any failed modules
+  const moduleIds = ['m2-content','m3-content','m4-content','m7-content','m8-content','m9-content','m5-content','m6-content','vex-cex-content'];
+  results.forEach((r, i) => {
+    const el = document.getElementById(moduleIds[i]);
+    if (!el) return;
+    if (r.status === 'rejected') {
+      el.dataset.stale = '1';
+    } else {
+      delete el.dataset.stale;
+    }
+  });
+}
+
+// ══════════════════════════════════════════════════
+//  REFRESH LOOP
+// ══════════════════════════════════════════════════
+let _nextRefreshAt = 0;
+
+function startRefreshLoop() {
+  _nextRefreshAt = Date.now() + REFRESH_INTERVAL * 1000;
+
+  if (countdownInterval) clearInterval(countdownInterval);
+  countdownInterval = setInterval(() => {
+    const remaining = Math.max(0, Math.ceil((_nextRefreshAt - Date.now()) / 1000));
+    secondsLeft = remaining;
+    updateCountdown();
+    if (Date.now() >= _nextRefreshAt) {
+      _nextRefreshAt = Date.now() + REFRESH_INTERVAL * 1000;
+      loadAllData();
+    }
+  }, 1000);
+
+  // Refresh immediately when tab becomes visible again after being hidden
+  document.removeEventListener('visibilitychange', _onVisibilityChange);
+  document.addEventListener('visibilitychange', _onVisibilityChange);
+}
+
+function _onVisibilityChange() {
+  if (document.visibilityState === 'visible' && Date.now() >= _nextRefreshAt) {
+    _nextRefreshAt = Date.now() + REFRESH_INTERVAL * 1000;
+    loadAllData();
+  }
+}
+
+function updateCountdown() {
+  const el = document.getElementById('refresh-countdown');
+  if (el) el.textContent = 'Actualisation dans ' + secondsLeft + 's';
+}
+
+// ══════════════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', initApp);
+</script>
+</body>
+</html>
