@@ -1,0 +1,31 @@
+# Secrets
+.env
+htpasswd
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+
+# DB locales
+*.db
+*.sqlite3
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker overrides locaux
+docker-compose.override.yml
+docker-compose-ssl.yml
+nginx-ssl.conf
+nginx.conf.new
+nginx.conf.backup

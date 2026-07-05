@@ -1,0 +1,116 @@
+{
+  "page": {
+    "title": "Mamos Crypto — Plateforme d'Analyse Trading BTC",
+    "description": "Options Analyzer, Mamos Trend Color et plus — la plateforme d'outils de trading crypto de Mamos."
+  },
+  "options_analyzer": {
+    "page": {
+      "title": "Options Analyzer BTC — GEX · MOPI · Gravity Map | Mamos Crypto",
+      "description": "Intelligence options BTC en temps réel — GEX, MOPI, Gravity Map, Options Walls. Lis le marché comme un market maker."
+    }
+  },
+  "mtc_dashboard": {
+    "page": {
+      "title": "Mamos Trend Color Dashboard — Cycles de Marché BTC | Mamos Crypto",
+      "description": "Mamos Trend Color — cycles de marché, phases d'accumulation, biais long terme BTC. L'indicateur Mamos original."
+    }
+  },
+  "nav": {
+    "tools": "Outils",
+    "roadmap": "Roadmap",
+    "about": "À propos",
+    "premium": "Premium — Bientôt"
+  },
+  "hero": {
+    "badge": "MAMOS CRYPTO PLATFORM",
+    "title": "L'arsenal analytique<br>des traders qui <span class=\"accent\">gagnent</span>",
+    "subtitle": "Options, cycles de marché, liquidité, IA — tous tes outils d'analyse BTC en un seul endroit.",
+    "cta_options": "Options Analyzer  →",
+    "cta_mtc": "MTC Dashboard  →",
+    "stat_live": "Outils Live",
+    "stat_dev": "En développement",
+    "stat_realtime": "Temps réel"
+  },
+  "tools": {
+    "eyebrow": "Plateforme",
+    "title": "Tes outils de trading",
+    "subtitle": "Construits par un trader, pour des traders sérieux. Un hub. Tous les outils.",
+    "options": {
+      "desc": "GEX · MOPI · Volatilité · Gravity Map · Options Walls<br>Intelligence options BTC en temps réel — lis le marché comme un market maker.",
+      "cta": "Ouvrir le dashboard →",
+      "source": "Données Deribit"
+    },
+    "mtc": {
+      "desc": "Cycles de marché · Accumulation · Euphorie · Signaux MTC · Biais long terme<br>L'indicateur Mamos original — savoir où on est dans le cycle BTC.",
+      "cta": "Explorer le MTC →",
+      "source": "Indicateur exclusif"
+    },
+    "mi": {
+      "desc": "Synthèse IA cross-market — whale activity, funding rates, sentiment agrégé en une décision."
+    },
+    "lm": {
+      "desc": "Carte des liquidités — zones de chasse, orderflow institutionnel, niveaux de stops visibles."
+    },
+    "ai": {
+      "desc": "Analyse conversationnelle — pose tes questions au marché, reçois une synthèse actionnelle immédiate."
+    }
+  },
+  "badge": {
+    "soon": "BIENTÔT"
+  },
+  "roadmap": {
+    "eyebrow": "Vision",
+    "title": "Roadmap",
+    "subtitle": "La plateforme évolue. Chaque outil livré est une brique de plus dans l'arsenal.",
+    "current_label": "Trimestre actuel",
+    "next_label": "Prochain trimestre",
+    "future_label": "Vision long terme",
+    "current_badge": "EN COURS",
+    "alerts": "Alertes Telegram live",
+    "premium_system": "Système Premium",
+    "public_api": "API publique traders"
+  },
+  "about": {
+    "eyebrow": "L'humain derrière les outils",
+    "role": "Créateur · Trader · Développeur d'indicateurs crypto",
+    "bio": "Je construis des outils que j'utilise moi-même pour trader. Pas de marketing vide — des systèmes réels, testés sur des marchés réels. Le Mamos Trend Color est utilisé par des milliers de traders crypto francophones depuis plusieurs années.",
+    "cred1": "Créateur du <strong>Mamos Trend Color</strong> — indicateur TradingView",
+    "cred2": "Créateur du <strong>TAOM</strong> — indicateur d'analyse de marché exclusif",
+    "cred3": "Développeur de l'<strong>Options Analyzer BTC</strong>",
+    "cred4": "<strong>Créateur de contenu crypto</strong> — YouTube FR (Mamos Crypto)"
+  },
+  "premium": {
+    "badge": "ACCÈS PREMIUM — BIENTÔT",
+    "title": "Un abonnement.<br>Tout l'écosystème Mamos.",
+    "subtitle": "La monétisation arrive. Prépare-toi à accéder à l'ensemble de la plateforme avec un seul abonnement.",
+    "plan_free": {
+      "tagline": "Toujours gratuit",
+      "f1": "Options Analyzer (base)",
+      "f2": "MTC Dashboard",
+      "f3": "Données temps réel",
+      "f4": "Alertes Telegram",
+      "f5": "Gravity Map (VIP)",
+      "f6": "Outils avancés",
+      "cta": "Accès actuel"
+    },
+    "plan_premium": {
+      "tagline": "Prix à définir — liste d'attente ouverte",
+      "f1": "Tout le plan Free",
+      "f2": "Alertes Telegram temps réel",
+      "f3": "Gravity Map complet",
+      "f4": "Market Intelligence",
+      "f5": "Liquidity Maps",
+      "f6": "AI Market Assistant",
+      "cta": "Rejoindre la liste d'attente →",
+      "disclaimer": "Aucune CB · Notification à la sortie"
+    }
+  },
+  "footer": {
+    "about": "À propos",
+    "copyright": "© 2026 Mamos Crypto — Tous droits réservés"
+  },
+  "waitlist": {
+    "email_subject": "Liste%20d%27attente%20Premium%20Mamos%20Crypto",
+    "email_body": "Bonjour%20Mamos%2C%0A%0AJe%20veux%20rejoindre%20la%20liste%20d%27attente%20Premium.%0A%0AMerci%20!"
+  }
+}

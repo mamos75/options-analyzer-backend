@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+<title data-i18n="mtc_dashboard.page.title">Mamos Trend Color Dashboard — BTC Market Cycles | Mamos Crypto</title>
+<meta name="description" data-i18n-attr="content:mtc_dashboard.page.description" content="Mamos Trend Color — market cycles, accumulation phases, long-term BTC bias."/>
+<script src="/js/i18n.js"></script>
+<script>I18n.init();</script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#070c18;
+  --surface:#0d1525;
+  --card:#111a2e;
+  --card2:#152038;
+  --border:#1c2d4a;
+  --border2:#243858;
+  --txt:#e2e8f5;
+  --txt2:#7a90b5;
+  --txt3:#4a5d80;
+  --green:#00d47e;
+  --green2:#00a862;
+  --red:#ff3c6b;
+  --yellow:#f5a623;
+  --blue:#3d8eff;
+  --purple:#9b6bff;
+  --purple2:#7b4fff;
+  /* MTC cycle colors */
+  --mtc-accum:#1a4a6e;
+  --mtc-markup:#1e6e4a;
+  --mtc-dist:#6e4a1a;
+  --mtc-bearish:#4a1a2e;
+}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--txt);font-family:'Inter',system-ui,-apple-system,sans-serif;font-size:15px;line-height:1.6;min-height:100dvh}
+
+/* ── HEADER ── */
+.header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:16px 32px;
+  padding-top:max(16px,calc(10px + env(safe-area-inset-top)));
+  background:rgba(7,12,24,0.92);
+  border-bottom:1px solid var(--border);
+  position:sticky;top:0;z-index:100;
+  backdrop-filter:blur(12px);
+}
+.header-left{display:flex;align-items:center;gap:20px}
+.back-link{
+  display:flex;align-items:center;gap:6px;
+  color:var(--txt2);text-decoration:none;font-size:13px;font-weight:500;
+  transition:color .2s;
+  border:1px solid var(--border);padding:6px 12px;border-radius:6px;
+}
+.back-link:hover{color:var(--txt);border-color:var(--border2)}
+.logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:16px;text-decoration:none;color:var(--txt)}
+.logo-dot{width:9px;height:9px;border-radius:50%;background:var(--green);box-shadow:0 0 10px var(--green);animation:blink 2s infinite}
+@keyframes blink{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(.85)}}
+.tool-chip{
+  background:rgba(0,212,126,.1);color:var(--green);
+  border:1px solid rgba(0,212,126,.2);
+  padding:4px 10px;border-radius:100px;
+  font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;
+}
+.btn-hub{
+  background:linear-gradient(135deg,var(--purple),var(--purple2));
+  color:#fff;border:none;padding:9px 20px;border-radius:8px;
+  font-weight:700;font-size:13px;cursor:pointer;
+  text-decoration:none;display:inline-block;
+  transition:opacity .2s;
+}
+.btn-hub:hover{opacity:.88}
+
+/* ── PAGE HERO ── */
+.page-hero{
+  padding:72px 32px 56px;text-align:center;
+  position:relative;overflow:hidden;
+}
+.page-hero-bg{
+  position:absolute;inset:0;
+  background:radial-gradient(ellipse 70% 50% at 50% -10%,rgba(0,212,126,.07) 0%,transparent 70%);
+  pointer-events:none;
+}
+.page-eyebrow{
+  display:inline-block;
+  background:rgba(0,212,126,.1);color:var(--green);
+  border:1px solid rgba(0,212,126,.2);
+  padding:5px 16px;border-radius:100px;
+  font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;
+  margin-bottom:20px;position:relative;
+}
+.page-title{
+  font-size:clamp(28px,5vw,52px);font-weight:900;line-height:1.1;
+  letter-spacing:-.03em;margin-bottom:16px;position:relative;
+}
+.page-title .gradient{
+  background:linear-gradient(135deg,var(--green),var(--blue),var(--purple));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+.page-sub{
+  color:var(--txt2);font-size:16px;max-width:520px;margin:0 auto;
+  line-height:1.65;position:relative;
+}
+
+/* ── STATUS BANNER ── */
+.status-banner{
+  background:var(--card);border:1px solid var(--border);
+  margin:0 32px 32px;border-radius:12px;
+  padding:16px 24px;display:flex;align-items:center;gap:16px;
+  flex-wrap:wrap;
+}
+.status-icon{font-size:22px}
+.status-text{flex:1}
+.status-title{font-weight:700;font-size:15px;margin-bottom:2px;color:var(--yellow)}
+.status-desc{font-size:13px;color:var(--txt2)}
+.status-badge{
+  background:rgba(245,166,35,.1);color:var(--yellow);
+  border:1px solid rgba(245,166,35,.2);
+  padding:5px 14px;border-radius:100px;
+  font-size:11px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;
+  flex-shrink:0;
+}
+
+/* ── MAIN CONTENT ── */
+.content{padding:0 32px 60px;max-width:1200px;margin:0 auto}
+
+/* ── CYCLE VISUALIZATION ── */
+.cycle-section{margin-bottom:40px}
+.section-label{
+  font-size:11px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;
+  color:var(--txt3);margin-bottom:16px;
+}
+.cycle-bar{
+  display:grid;grid-template-columns:repeat(4,1fr);
+  border-radius:12px;overflow:hidden;border:1px solid var(--border);
+  height:90px;
+}
+.cycle-phase{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:6px;padding:16px 12px;position:relative;cursor:default;
+}
+.cycle-phase.accum{background:linear-gradient(135deg,rgba(26,74,110,.8),rgba(26,74,110,.4))}
+.cycle-phase.markup{background:linear-gradient(135deg,rgba(30,110,74,.8),rgba(30,110,74,.4))}
+.cycle-phase.dist{background:linear-gradient(135deg,rgba(110,74,26,.8),rgba(110,74,26,.4))}
+.cycle-phase.bearish{background:linear-gradient(135deg,rgba(74,26,46,.8),rgba(74,26,46,.4))}
+.cycle-phase::after{
+  content:'';position:absolute;bottom:0;left:0;right:0;height:3px;
+}
+.cycle-phase.accum::after{background:var(--blue)}
+.cycle-phase.markup::after{background:var(--green)}
+.cycle-phase.dist::after{background:var(--yellow)}
+.cycle-phase.bearish::after{background:var(--red)}
+.cycle-name{font-size:11px;font-weight:700;letter-spacing:.8px;text-transform:uppercase}
+.cycle-phase.accum .cycle-name{color:var(--blue)}
+.cycle-phase.markup .cycle-name{color:var(--green)}
+.cycle-phase.dist .cycle-name{color:var(--yellow)}
+.cycle-phase.bearish .cycle-name{color:var(--red)}
+.cycle-emoji{font-size:20px}
+.cycle-desc{font-size:11px;color:var(--txt2)}
+
+/* ── FEATURES GRID ── */
+.features-grid{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:16px;
+  margin-bottom:40px;
+}
+.feature-card{
+  background:var(--card);border:1px solid var(--border);border-radius:12px;
+  padding:22px;
+}
+.feat-icon{font-size:22px;margin-bottom:12px}
+.feat-name{font-size:14px;font-weight:700;margin-bottom:6px}
+.feat-desc{font-size:13px;color:var(--txt2);line-height:1.5}
+
+/* ── SIGNAL PREVIEW (mockup) ── */
+.signal-preview{
+  background:var(--card);border:1px solid var(--border);border-radius:12px;
+  padding:24px;margin-bottom:40px;
+}
+.preview-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
+.preview-title{font-weight:700;font-size:15px}
+.preview-tag{
+  background:rgba(245,166,35,.1);color:var(--yellow);
+  border:1px solid rgba(245,166,35,.2);
+  padding:3px 10px;border-radius:6px;
+  font-size:10px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;
+}
+.mockup-chart{
+  height:140px;border-radius:8px;overflow:hidden;position:relative;
+  background:var(--surface);border:1px solid var(--border);
+  display:flex;align-items:flex-end;padding:0 8px 8px;gap:3px;
+}
+.mockup-bar{border-radius:3px 3px 0 0;width:100%;transition:height .3s}
+.mockup-overlay{
+  position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  background:rgba(7,12,24,.6);backdrop-filter:blur(3px);
+  font-size:13px;color:var(--txt2);font-style:italic;
+}
+.signal-items{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px}
+.signal-item{
+  background:var(--surface);border:1px solid var(--border);border-radius:8px;
+  padding:14px;display:flex;align-items:center;gap:12px;
+}
+.signal-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.signal-dot.green{background:var(--green);box-shadow:0 0 8px var(--green)}
+.signal-dot.blue{background:var(--blue)}
+.signal-dot.yellow{background:var(--yellow)}
+.signal-dot.red{background:var(--red)}
+.signal-info{}
+.signal-label{font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:.7px}
+.signal-value{font-size:15px;font-weight:700}
+
+/* ── CTA SECTION ── */
+.cta-section{
+  text-align:center;
+  background:var(--card);border:1px solid var(--border);border-radius:16px;
+  padding:48px 32px;
+}
+.cta-title{font-size:clamp(20px,3vw,28px);font-weight:800;margin-bottom:12px}
+.cta-sub{color:var(--txt2);font-size:15px;max-width:420px;margin:0 auto 28px;line-height:1.6}
+.cta-buttons{display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap}
+.btn-primary{
+  background:linear-gradient(135deg,var(--green),var(--green2));
+  color:#070c18;border:none;padding:13px 26px;border-radius:10px;
+  font-weight:800;font-size:14px;cursor:pointer;
+  text-decoration:none;display:inline-flex;align-items:center;gap:8px;
+  transition:opacity .2s,transform .1s;
+}
+.btn-primary:hover{opacity:.9;transform:translateY(-2px)}
+.btn-secondary{
+  background:transparent;color:var(--txt);
+  border:1px solid var(--border2);padding:13px 26px;border-radius:10px;
+  font-weight:600;font-size:14px;cursor:pointer;
+  text-decoration:none;display:inline-block;
+  transition:border-color .2s;
+}
+.btn-secondary:hover{border-color:var(--txt2)}
+
+/* ── RESPONSIVE ── */
+@media(max-width:900px){
+  .header{padding:14px 20px}
+  .page-hero{padding:56px 20px 40px}
+  .status-banner{margin:0 20px 24px}
+  .content{padding:0 20px 48px}
+  .features-grid{grid-template-columns:1fr 1fr}
+  .cycle-bar{grid-template-columns:1fr 1fr;height:auto}
+}
+@media(max-width:600px){
+  .header{padding:12px 16px}
+  .page-hero{padding:44px 16px 32px}
+  .status-banner{margin:0 16px 20px;flex-direction:column;align-items:flex-start}
+  .content{padding:0 16px 40px}
+  .features-grid{grid-template-columns:1fr}
+  .cycle-bar{grid-template-columns:1fr 1fr}
+  .signal-items{grid-template-columns:1fr}
+  .cta-section{padding:32px 20px}
+  .cta-buttons{flex-direction:column;align-items:stretch}
+  .btn-primary,.btn-secondary{text-align:center;justify-content:center}
+}
+@media(max-width:400px){
+  .cycle-bar{grid-template-columns:1fr 1fr}
+}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="header">
+  <div class="header-left">
+    <a href="/" class="back-link">← Hub</a>
+    <a href="/" class="logo">
+      <span class="logo-dot"></span>
+      Mamos Crypto
+    </a>
+    <span class="tool-chip">MTC Dashboard</span>
+  </div>
+  <a href="/#premium" class="btn-hub">Premium — Bientôt</a>
+</header>
+
+<!-- HERO -->
+<div class="page-hero">
+  <div class="page-hero-bg"></div>
+  <div class="page-eyebrow">Indicateur Exclusif</div>
+  <h1 class="page-title">
+    <span class="gradient">Mamos Trend Color</span><br>Dashboard
+  </h1>
+  <p class="page-sub">
+    Cycles de marché · Phases d'accumulation · Euphorie · Signaux MTC · Biais long terme BTC
+  </p>
+</div>
+
+<!-- STATUS BANNER -->
+<div class="status-banner">
+  <span class="status-icon">🚧</span>
+  <div class="status-text">
+    <div class="status-title">Dashboard en cours de développement</div>
+    <div class="status-desc">Le MTC Dashboard est en construction. Abonne-toi sur YouTube pour être notifié au lancement.</div>
+  </div>
+  <div class="status-badge">EN DEV</div>
+</div>
+
+<!-- CONTENT -->
+<div class="content">
+
+  <!-- Cycle visualization -->
+  <div class="cycle-section">
+    <div class="section-label">Les 4 phases du cycle BTC selon le MTC</div>
+    <div class="cycle-bar">
+      <div class="cycle-phase accum">
+        <span class="cycle-emoji">🧊</span>
+        <span class="cycle-name">Accumulation</span>
+        <span class="cycle-desc">Smart money achète</span>
+      </div>
+      <div class="cycle-phase markup">
+        <span class="cycle-emoji">🚀</span>
+        <span class="cycle-name">Markup</span>
+        <span class="cycle-desc">Tendance haussière</span>
+      </div>
+      <div class="cycle-phase dist">
+        <span class="cycle-emoji">⚠️</span>
+        <span class="cycle-name">Distribution</span>
+        <span class="cycle-desc">Smart money vend</span>
+      </div>
+      <div class="cycle-phase bearish">
+        <span class="cycle-emoji">🔻</span>
+        <span class="cycle-name">Markdown</span>
+        <span class="cycle-desc">Tendance baissière</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Features -->
+  <div class="section-label">Ce que le dashboard MTC apportera</div>
+  <div class="features-grid">
+    <div class="feature-card">
+      <div class="feat-icon">🎨</div>
+      <div class="feat-name">Signaux MTC temps réel</div>
+      <div class="feat-desc">Couleur du marché actuel — sais-tu dans quelle phase on est ? Le MTC te répond en une couleur.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feat-icon">📊</div>
+      <div class="feat-name">Dashboard visuel des cycles</div>
+      <div class="feat-desc">Visualisation interactive de l'historique des cycles BTC. Vois où chaque phase a commencé et duré.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feat-icon">🧊</div>
+      <div class="feat-name">Phases d'accumulation</div>
+      <div class="feat-desc">Détection automatique des zones d'accumulation — quand le smart money entre en position.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feat-icon">🔥</div>
+      <div class="feat-name">Phases d'euphorie</div>
+      <div class="feat-desc">Identification des zones de surchauffe et d'euphorie — quand le retail achète à l'excès.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feat-icon">🧭</div>
+      <div class="feat-name">Biais long terme</div>
+      <div class="feat-desc">Direction macro du marché — bullish, bearish ou neutre selon le positionnement des cycles.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feat-icon">🔔</div>
+      <div class="feat-name">Alertes de changement de phase</div>
+      <div class="feat-desc">Notification Telegram quand le MTC change de phase — ne rate plus les rotations de cycle.</div>
+    </div>
+  </div>
+
+  <!-- Signal mockup -->
+  <div class="signal-preview">
+    <div class="preview-header">
+      <div class="preview-title">Aperçu — données simulées</div>
+      <div class="preview-tag">MOCKUP</div>
+    </div>
+    <div class="mockup-chart">
+      <div class="mockup-bar" style="height:30%;background:var(--mtc-accum)"></div>
+      <div class="mockup-bar" style="height:35%;background:var(--mtc-accum)"></div>
+      <div class="mockup-bar" style="height:40%;background:var(--mtc-accum)"></div>
+      <div class="mockup-bar" style="height:55%;background:var(--mtc-markup)"></div>
+      <div class="mockup-bar" style="height:70%;background:var(--mtc-markup)"></div>
+      <div class="mockup-bar" style="height:85%;background:var(--mtc-markup)"></div>
+      <div class="mockup-bar" style="height:90%;background:var(--mtc-markup)"></div>
+      <div class="mockup-bar" style="height:78%;background:var(--mtc-dist)"></div>
+      <div class="mockup-bar" style="height:65%;background:var(--mtc-dist)"></div>
+      <div class="mockup-bar" style="height:50%;background:var(--mtc-dist)"></div>
+      <div class="mockup-bar" style="height:38%;background:var(--mtc-bearish)"></div>
+      <div class="mockup-bar" style="height:25%;background:var(--mtc-bearish)"></div>
+      <div class="mockup-bar" style="height:20%;background:var(--mtc-bearish)"></div>
+      <div class="mockup-bar" style="height:22%;background:var(--mtc-accum)"></div>
+      <div class="mockup-bar" style="height:28%;background:var(--mtc-accum)"></div>
+      <div class="mockup-bar" style="height:36%;background:var(--mtc-accum)"></div>
+      <div class="mockup-bar" style="height:48%;background:var(--mtc-markup)"></div>
+      <div class="mockup-bar" style="height:62%;background:var(--mtc-markup)"></div>
+      <div class="mockup-bar" style="height:78%;background:var(--mtc-markup)"></div>
+      <div class="mockup-bar" style="height:88%;background:var(--mtc-markup)"></div>
+      <div class="mockup-overlay">Données réelles disponibles au lancement</div>
+    </div>
+    <div class="signal-items">
+      <div class="signal-item">
+        <div class="signal-dot green"></div>
+        <div class="signal-info">
+          <div class="signal-label">Phase actuelle</div>
+          <div class="signal-value">— En attente</div>
+        </div>
+      </div>
+      <div class="signal-item">
+        <div class="signal-dot blue"></div>
+        <div class="signal-info">
+          <div class="signal-label">Biais long terme</div>
+          <div class="signal-value">— En attente</div>
+        </div>
+      </div>
+      <div class="signal-item">
+        <div class="signal-dot yellow"></div>
+        <div class="signal-info">
+          <div class="signal-label">Signal MTC</div>
+          <div class="signal-value">— En attente</div>
+        </div>
+      </div>
+      <div class="signal-item">
+        <div class="signal-dot red"></div>
+        <div class="signal-info">
+          <div class="signal-label">Durée de phase</div>
+          <div class="signal-value">— En attente</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CTA -->
+  <div class="cta-section">
+    <div class="cta-title">Ne rate pas le lancement</div>
+    <p class="cta-sub">
+      Abonne-toi sur YouTube — tu seras parmi les premiers informés quand le MTC Dashboard sera disponible.
+    </p>
+    <div class="cta-buttons">
+      <a href="https://www.youtube.com/@mamoscrypto" target="_blank" rel="noopener" class="btn-primary">
+        ▶ &nbsp;S'abonner sur YouTube
+      </a>
+      <a href="/tools/options-analyzer" class="btn-secondary">
+        ⚡ Options Analyzer (disponible maintenant)
+      </a>
+    </div>
+  </div>
+
+</div>
+
+<!-- FOOTER -->
+<footer style="border-top:1px solid var(--border);padding:24px 32px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+  <a href="/" style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:14px;color:var(--txt2);text-decoration:none">
+    <span style="width:7px;height:7px;border-radius:50%;background:var(--green);display:inline-block"></span>
+    Mamos Crypto
+  </a>
+  <div style="display:flex;gap:20px">
+    <a href="/" style="color:var(--txt3);text-decoration:none;font-size:13px">← Hub</a>
+    <a href="/tools/options-analyzer" style="color:var(--txt3);text-decoration:none;font-size:13px">Options Analyzer</a>
+    <a href="/#roadmap" style="color:var(--txt3);text-decoration:none;font-size:13px">Roadmap</a>
+  </div>
+  <div style="font-size:12px;color:var(--txt3)">© 2026 Mamos Crypto</div>
+</footer>
+
+</body>
+</html>

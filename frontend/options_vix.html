@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+<title>VIX Dashboard — Volatility Regime | Mamos Crypto</title>
+<meta name="description" content="Dashboard VIX temps réel — Régime volatilité, term structure, VVIX, percentile, contango/backwardation."/>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+<style>
+:root {
+  --bg:#0d0f14; --card:#12151c; --border:#1e2330;
+  --txt1:#e8eaf0; --txt2:#8892a4; --txt3:#4a5568;
+  --accent:#8B5CF6; --green:#10B981; --red:#EF4444;
+  --orange:#F97316; --yellow:#F59E0B; --purple:#8B5CF6;
+  --cyan:#06B6D4; --gray:#6B7280; --blue:#3b82f6;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--txt1);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:14px}
+
+header{
+  background:var(--card);border-bottom:1px solid var(--border);
+  padding:14px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;
+  position:sticky;top:0;z-index:50;backdrop-filter:blur(8px);
+}
+.header-left h1{font-size:17px;font-weight:700}
+.header-left .sub{font-size:11px;color:var(--txt2);margin-top:2px}
+.header-right{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.nav-link{font-size:12px;color:var(--txt2);text-decoration:none;padding:5px 10px;border:1px solid var(--border);border-radius:6px;transition:all .2s}
+.nav-link:hover,.nav-link.active{border-color:var(--purple);color:var(--purple)}
+.status-pill{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--txt2);padding:4px 10px;background:rgba(30,35,48,.6);border:1px solid var(--border);border-radius:20px}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--gray)}
+.dot-live{background:var(--green);box-shadow:0 0 6px var(--green)}
+.dot-stale{background:var(--yellow)}
+
+.container{max-width:1200px;margin:0 auto;padding:20px}
+
+.stale-banner{background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);color:var(--yellow);padding:10px 14px;border-radius:8px;font-size:12px;margin-bottom:16px;display:none}
+
+.section-title{font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--txt3);margin:24px 0 12px}
+
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+.grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:16px}
+.grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:16px}
+.grid-full{margin-bottom:16px}
+
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;transition:border-color .2s}
+.card:hover{border-color:rgba(139,92,246,.3)}
+.card-title{font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--txt3);margin-bottom:10px}
+
+.big-number{font-size:36px;font-weight:800;letter-spacing:-.5px;line-height:1}
+.sub-text{font-size:11px;color:var(--txt2);margin-top:4px}
+
+.row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid rgba(30,35,48,.6)}
+.row:last-child{border-bottom:none}
+.row-label{font-size:12px;color:var(--txt2)}
+.row-value{font-size:12px;font-weight:600}
+
+.regime-block{padding:14px;border-radius:10px;margin-bottom:14px;border-left:3px solid var(--purple);background:rgba(139,92,246,.05);transition:all .4s}
+.regime-name{font-size:20px;font-weight:800;letter-spacing:.5px;margin-bottom:6px}
+.regime-desc{font-size:12px;color:var(--txt2);line-height:1.6}
+
+.badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;letter-spacing:.5px}
+
+/* Term structure bar */
+.ts-bar-wrap{margin:6px 0}
+.ts-bar-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+.ts-bar-label{font-size:12px;color:var(--txt2)}
+.ts-bar-value{font-size:13px;font-weight:700}
+.ts-bar{height:8px;background:rgba(255,255,255,.06);border-radius:4px;overflow:hidden;position:relative}
+.ts-bar-fill{height:100%;border-radius:4px;transition:width .5s}
+.ts-bar-marker{position:absolute;top:-2px;bottom:-2px;width:2px;background:rgba(255,255,255,.3);border-radius:1px}
+
+/* VIX regime tags */
+.regime-tag{display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:8px;font-size:13px;font-weight:700;margin-right:6px;margin-bottom:6px}
+
+/* Feature grid */
+.feat-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.feat-item{background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:4px}
+.feat-label{font-size:10px;color:var(--txt3);letter-spacing:.5px;text-transform:uppercase}
+.feat-value{font-size:16px;font-weight:700}
+
+/* History chart */
+#vix-chart{height:200px}
+
+@media(max-width:900px){.grid-3,.grid-4{grid-template-columns:1fr 1fr}}
+@media(max-width:600px){.grid-2,.grid-3,.grid-4{grid-template-columns:1fr}.big-number{font-size:28px}.feat-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <h1>VIX — Volatility Dashboard</h1>
+    <div class="sub">Régime · Term Structure · VVIX · Percentile · Contango</div>
+  </div>
+  <div class="header-right">
+    <a href="/tools/options-analyzer" class="nav-link">BTC Options</a>
+    <a href="/tools/options-sp500" class="nav-link">SPY</a>
+    <a href="/tools/options-vix" class="nav-link active">VIX</a>
+    <a href="/tools/options-indices" class="nav-link">Indices</a>
+    <div class="status-pill">
+      <span class="dot" id="status-dot"></span>
+      <span id="status-txt">—</span>
+    </div>
+  </div>
+</header>
+
+<div class="container">
+  <div class="stale-banner" id="stale-banner">Données VIX périmées — worker en cours de chargement...</div>
+
+  <!-- VIX Snapshot -->
+  <div class="section-title">VIX en temps réel</div>
+  <div class="grid-4">
+    <div class="card">
+      <div class="card-title">VIX (30j)</div>
+      <div class="big-number" id="vix-val">—</div>
+      <div class="sub-text" id="vix-chg1d">Variation 1j : —</div>
+      <div class="sub-text" id="vix-chg5d">Variation 5j : —</div>
+    </div>
+    <div class="card">
+      <div class="card-title">IV Rank / Percentile</div>
+      <div class="big-number" id="iv-rank" style="font-size:28px">—</div>
+      <div class="sub-text" id="iv-pct">Percentile : —</div>
+    </div>
+    <div class="card">
+      <div class="card-title">VVIX (Vol of Vol)</div>
+      <div class="big-number" id="vvix-val" style="font-size:28px">—</div>
+      <div class="sub-text" id="vvix-sub">—</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Structure</div>
+      <div class="big-number" id="contango-val" style="font-size:20px;margin-top:8px">—</div>
+      <div class="sub-text">VIX9D spread : <span id="vix9d-spread" style="font-weight:700">—</span></div>
+      <div class="sub-text">VIX3M spread : <span id="vix3m-spread" style="font-weight:700">—</span></div>
+    </div>
+  </div>
+
+  <!-- Régime VIX -->
+  <div class="section-title">VIX Regime Engine</div>
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">Régime de Volatilité</div>
+      <div class="regime-block" id="vix-regime-block" style="border-color:var(--gray)">
+        <div class="regime-name" id="vix-regime-name">—</div>
+        <div class="regime-desc" id="vix-regime-desc">Chargement...</div>
+      </div>
+      <div id="regime-flags" style="margin-top:8px"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Signaux de Régime</div>
+      <div class="feat-grid" id="regime-features"></div>
+    </div>
+  </div>
+
+  <!-- Term Structure -->
+  <div class="section-title">Term Structure VIX</div>
+  <div class="card grid-full">
+    <div class="card-title">Courbe des volatilités implicites</div>
+    <div id="vix-chart"></div>
+    <div style="margin-top:16px">
+      <div class="ts-bar-wrap" id="ts-vix9d-wrap">
+        <div class="ts-bar-header">
+          <span class="ts-bar-label">VIX9D <span style="color:var(--txt3)">(9 jours)</span></span>
+          <span class="ts-bar-value" id="ts-vix9d">—</span>
+        </div>
+        <div class="ts-bar"><div class="ts-bar-fill" id="bar-vix9d" style="background:var(--cyan);width:0%"></div></div>
+      </div>
+      <div class="ts-bar-wrap" id="ts-vix-wrap">
+        <div class="ts-bar-header">
+          <span class="ts-bar-label">VIX <span style="color:var(--txt3)">(30 jours)</span></span>
+          <span class="ts-bar-value" id="ts-vix">—</span>
+        </div>
+        <div class="ts-bar"><div class="ts-bar-fill" id="bar-vix" style="background:var(--purple);width:0%"></div></div>
+      </div>
+      <div class="ts-bar-wrap" id="ts-vix3m-wrap">
+        <div class="ts-bar-header">
+          <span class="ts-bar-label">VIX3M <span style="color:var(--txt3)">(93 jours)</span></span>
+          <span class="ts-bar-value" id="ts-vix3m">—</span>
+        </div>
+        <div class="ts-bar"><div class="ts-bar-fill" id="bar-vix3m" style="background:var(--blue);width:0%"></div></div>
+      </div>
+      <div class="ts-bar-wrap" id="ts-vix6m-wrap">
+        <div class="ts-bar-header">
+          <span class="ts-bar-label">VIX6M <span style="color:var(--txt3)">(183 jours)</span></span>
+          <span class="ts-bar-value" id="ts-vix6m">—</span>
+        </div>
+        <div class="ts-bar"><div class="ts-bar-fill" id="bar-vix6m" style="background:var(--blue);width:0%;opacity:.6"></div></div>
+      </div>
+    </div>
+    <div style="margin-top:14px;display:flex;gap:12px;flex-wrap:wrap" id="structure-analysis"></div>
+  </div>
+
+  <!-- Interprétation -->
+  <div class="section-title">Lecture Décision</div>
+  <div class="card grid-full" id="decision-card">
+    <div id="decision-content" style="font-size:14px;line-height:1.8;color:var(--txt1)">Chargement...</div>
+  </div>
+</div>
+
+<script>
+const API = window.MAMOS_API_BASE || (location.protocol === 'file:' ? 'http://localhost:8000' : '');
+let vixChart = null;
+
+async function fetchJSON(path) {
+  const r = await fetch(API + path);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+function fmtNum(v, dec=2) { return v == null ? '—' : Number(v).toFixed(dec); }
+function fmtPct(v) { if (v == null) return '—'; const s=v>=0?'+':''; return `${s}${Number(v).toFixed(2)}%`; }
+function colorPct(v) { return v==null?'var(--txt2)':v>=0?'var(--green)':'var(--red)'; }
+function tsToDate(ts) { if (!ts) return '—'; return new Date(ts*1000).toLocaleString('fr-FR',{hour:'2-digit',minute:'2-digit',day:'2-digit',month:'short'}); }
+
+const REGIME_COLORS = {
+  NORMAL:'#10B981', ELEVATED:'#F59E0B', STRESS:'#F97316',
+  PANIC:'#EF4444', PANIC_EXTREME:'#7C3AED', RELIEF_RALLY:'#06B6D4',
+  VOL_CRUSH:'#6B7280', UNKNOWN:'#6B7280',
+};
+function regimeColor(r) { return REGIME_COLORS[r] || '#6B7280'; }
+
+const REGIME_DESC_DECISION = {
+  NORMAL: 'Marché calme. Les dealers ne sont pas sous pression. Favorable pour stratégies theta/vendeur.',
+  ELEVATED: 'Volatilité au-dessus de la normale. Prudence sur les positions directionnelles non protégées.',
+  STRESS: 'Stress de marché. Volatilité élevée = prime options chère. Évitez acheter des calls/puts nus.',
+  PANIC: 'PANIQUE — volatilité extrême. Opportunité de vendre de la vol si rebond anticipé.',
+  PANIC_EXTREME: 'PANIQUE EXTRÊME. Hedging maximal justifié. Attendez stabilisation avant entrée.',
+  RELIEF_RALLY: 'Rally de soulagement — VIX comprime. Momentum haussier probable à court terme.',
+  VOL_CRUSH: 'Vol crush — vente de premium optimale. Spreads et iron condors favorisés.',
+  UNKNOWN: 'Données insuffisantes pour classifier le régime.',
+};
+
+function initVixChart() {
+  const el = document.getElementById('vix-chart');
+  vixChart = echarts.init(el, 'dark', {backgroundColor:'transparent'});
+}
+
+function updateVixChart(vix9d, vix, vix3m, vix6m) {
+  if (!vixChart) return;
+  const data = [
+    {name:'VIX9D (9j)', value:vix9d??0, color:'#06B6D4'},
+    {name:'VIX (30j)', value:vix??0, color:'#8B5CF6'},
+    {name:'VIX3M (93j)', value:vix3m??0, color:'#3b82f6'},
+    {name:'VIX6M (183j)', value:vix6m??0, color:'#60a5fa'},
+  ].filter(d=>d.value>0);
+
+  if (!data.length) return;
+
+  vixChart.setOption({
+    grid:{top:10,bottom:30,left:50,right:20},
+    xAxis:{
+      type:'category',
+      data:data.map(d=>d.name),
+      axisLabel:{color:'#8892a4',fontSize:11},
+      axisLine:{lineStyle:{color:'#1e2330'}},
+    },
+    yAxis:{
+      type:'value',
+      min: Math.min(...data.map(d=>d.value))*0.85,
+      axisLabel:{color:'#8892a4',fontSize:10},
+      splitLine:{lineStyle:{color:'rgba(30,35,48,.4)'}},
+    },
+    series:[{
+      type:'bar',
+      data:data.map(d=>({value:d.value,itemStyle:{color:d.color,borderRadius:4}})),
+      label:{show:true,position:'top',color:'#e8eaf0',fontSize:12,fontWeight:700,formatter:p=>fmtNum(p.value,1)},
+    }],
+    tooltip:{trigger:'axis',backgroundColor:'#12151c',borderColor:'#1e2330',textStyle:{color:'#e8eaf0'}},
+  });
+}
+
+async function loadVix() {
+  try {
+    const d = await fetchJSON('/api/spy');
+    const vix = d.vix||{};
+    const vixRegime = d.vix_regime||{};
+    const feats = vixRegime.features||{};
+
+    // Status
+    const stale = d.stale;
+    if (stale) document.getElementById('stale-banner').style.display='block';
+    document.getElementById('status-dot').className = 'dot ' + (stale?'dot-stale':'dot-live');
+    document.getElementById('status-txt').textContent = stale?'Stale':'Live';
+
+    // VIX snapshot
+    const vixVal = vix.current;
+    document.getElementById('vix-val').textContent = vixVal!=null ? fmtNum(vixVal,2) : '—';
+    const chg1d = vix.change_1d;
+    const chg1dEl = document.getElementById('vix-chg1d');
+    chg1dEl.textContent = `Variation 1j : ${fmtPct(chg1d)}`;
+    if (chg1d!=null) chg1dEl.style.color = colorPct(-chg1d); // VIX inverse du marché
+    const chg5d = vix.change_5d;
+    const chg5dEl = document.getElementById('vix-chg5d');
+    chg5dEl.textContent = `Variation 5j : ${fmtPct(chg5d)}`;
+    if (chg5d!=null) chg5dEl.style.color = colorPct(-chg5d);
+
+    // IV Rank / Percentile
+    document.getElementById('iv-rank').textContent = vix.iv_rank!=null ? fmtNum(vix.iv_rank,0)+'%' : '—';
+    document.getElementById('iv-pct').textContent = `Percentile : ${vix.percentile!=null?fmtNum(vix.percentile,0)+'%':'—'}`;
+
+    // VVIX
+    const vvix = vix.vvix;
+    document.getElementById('vvix-val').textContent = vvix!=null ? fmtNum(vvix,1) : '—';
+    document.getElementById('vvix-sub').textContent = vvix!=null ? (vvix>120?'⚠ Stress extrême':vvix>100?'Élevé':'Normal') : '—';
+    if (vvix!=null) document.getElementById('vvix-val').style.color = vvix>120?'var(--red)':vvix>100?'var(--yellow)':'var(--green)';
+
+    // Structure
+    const contango = feats.contango_backwardation;
+    const isBack = feats.is_backwardation;
+    const contEl = document.getElementById('contango-val');
+    if (contango!=null) {
+      contEl.textContent = isBack ? '⚠ BACKWARDATION' : 'CONTANGO';
+      contEl.style.color = isBack ? 'var(--red)' : 'var(--green)';
+    }
+    const v9dSpread = vix.vix9d_vix_spread;
+    const v3mSpread = vix.vix_vix3m_spread;
+    const v9dEl = document.getElementById('vix9d-spread');
+    v9dEl.textContent = v9dSpread!=null ? fmtNum(v9dSpread,2) : '—';
+    if (v9dSpread!=null) v9dEl.style.color = v9dSpread<0?'var(--green)':'var(--red)';
+    const v3mEl = document.getElementById('vix3m-spread');
+    v3mEl.textContent = v3mSpread!=null ? fmtNum(v3mSpread,2) : '—';
+    if (v3mSpread!=null) v3mEl.style.color = v3mSpread<0?'var(--green)':'var(--red)';
+
+    // Regime
+    const regime = vixRegime.regime || 'UNKNOWN';
+    const rc = regimeColor(regime);
+    const block = document.getElementById('vix-regime-block');
+    block.style.borderColor = rc;
+    block.style.background = rc+'18';
+    const nameEl = document.getElementById('vix-regime-name');
+    nameEl.style.color = rc;
+    nameEl.textContent = regime.replace(/_/g,' ');
+    document.getElementById('vix-regime-desc').textContent = vixRegime.description||'—';
+
+    // Flags
+    const flags = [];
+    if (feats.is_backwardation) flags.push({txt:'⚠ Backwardation',c:'var(--red)',bg:'rgba(239,68,68,.1)'});
+    if (feats.is_front_stressed) flags.push({txt:'⚠ Front stressed',c:'var(--orange)',bg:'rgba(249,115,22,.1)'});
+    if (feats.is_backwardation===false && !feats.is_front_stressed) flags.push({txt:'✓ Structure normale',c:'var(--green)',bg:'rgba(16,185,129,.1)'});
+    document.getElementById('regime-flags').innerHTML = flags.map(f=>`<span class="badge" style="background:${f.bg};color:${f.c};margin-right:6px;margin-bottom:6px">${f.txt}</span>`).join('');
+
+    // Features
+    const featItems = [
+      {label:'VIX Level', value:fmtNum(feats.vix_level,1), color:feats.vix_level>30?'var(--red)':feats.vix_level>20?'var(--yellow)':'var(--green)'},
+      {label:'VIX Chg 1j', value:fmtPct(feats.vix_change_1d), color:feats.vix_change_1d>0?'var(--red)':'var(--green)'},
+      {label:'VIX Chg 5j', value:fmtPct(feats.vix_change_5d), color:feats.vix_change_5d>0?'var(--red)':'var(--green)'},
+      {label:'Percentile', value:feats.vix_percentile!=null?fmtNum(feats.vix_percentile,0)+'%':'—', color:'var(--txt1)'},
+      {label:'Vol of Vol', value:fmtNum(feats.vol_of_vol,2), color:'var(--txt1)'},
+    ];
+    document.getElementById('regime-features').innerHTML = featItems.map(f=>`
+      <div class="feat-item">
+        <div class="feat-label">${f.label}</div>
+        <div class="feat-value" style="color:${f.color}">${f.value}</div>
+      </div>`).join('');
+
+    // Term structure chart
+    if (!vixChart) initVixChart();
+    updateVixChart(vix.vix9d, vixVal, vix.vix3m, vix.vix6m);
+
+    // Bars (normalize sur 80 max)
+    const maxV = 80;
+    const pct = v => Math.min(100, (v||0)/maxV*100);
+    document.getElementById('ts-vix9d').textContent = fmtNum(vix.vix9d,2);
+    document.getElementById('bar-vix9d').style.width = pct(vix.vix9d)+'%';
+    document.getElementById('ts-vix').textContent = fmtNum(vixVal,2);
+    document.getElementById('bar-vix').style.width = pct(vixVal)+'%';
+    document.getElementById('ts-vix3m').textContent = fmtNum(vix.vix3m,2);
+    document.getElementById('bar-vix3m').style.width = pct(vix.vix3m)+'%';
+    document.getElementById('ts-vix6m').textContent = fmtNum(vix.vix6m,2);
+    document.getElementById('bar-vix6m').style.width = pct(vix.vix6m)+'%';
+
+    // Structure analysis
+    const structParts = [];
+    if (isBack) structParts.push(`<span class="badge" style="background:rgba(239,68,68,.1);color:var(--red)">⚠ BACKWARDATION — panique courte durée</span>`);
+    else structParts.push(`<span class="badge" style="background:rgba(16,185,129,.1);color:var(--green)">✓ CONTANGO — structure normale</span>`);
+    if (vix.vix9d!=null && vixVal!=null && vix.vix9d > vixVal) structParts.push(`<span class="badge" style="background:rgba(249,115,22,.1);color:var(--orange)">VIX9D > VIX — stress à très court terme</span>`);
+    if (vix.vix3m!=null && vixVal!=null && vix.vix3m < vixVal) structParts.push(`<span class="badge" style="background:rgba(245,158,11,.1);color:var(--yellow)">Inversion 3M — marché price une baisse de vol</span>`);
+    document.getElementById('structure-analysis').innerHTML = structParts.join('');
+
+    // Decision card
+    const decisionText = REGIME_DESC_DECISION[regime] || REGIME_DESC_DECISION.UNKNOWN;
+    const rankPct = vix.percentile ?? 50;
+    const rankMsg = rankPct > 80 ? '🔴 Premium options très élevé — vendre de la vol est payant mais risqué.'
+      : rankPct > 60 ? '🟡 Premium options élevé — bon pour les credit spreads.'
+      : rankPct < 30 ? '🟢 Premium options bas — acheter de la vol (protection) est peu coûteux.'
+      : '⚪ Premium options dans la norme.';
+    document.getElementById('decision-content').innerHTML = `
+      <div style="margin-bottom:12px;padding:12px;background:${rc}18;border-left:3px solid ${rc};border-radius:6px">
+        <strong>${regime.replace(/_/g,' ')}</strong> — ${decisionText}
+      </div>
+      <div>${rankMsg}</div>
+      ${isBack ? '<div style="margin-top:10px;color:var(--orange)">⚠ <strong>Backwardation</strong> = stress court terme violent. Les shorts vol sont dangereux. Attendre retour contango.</div>' : ''}
+    `;
+
+  } catch(e) {
+    document.getElementById('stale-banner').style.display='block';
+    document.getElementById('stale-banner').textContent = 'Erreur chargement VIX : ' + e.message;
+    console.error(e);
+  }
+}
+
+loadVix();
+setInterval(loadVix, 120000);
+</script>
+</body>
+</html>

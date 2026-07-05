@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+<title>SPY Dashboard — VIX · US-MOPI · Stress Rebound | Mamos Crypto</title>
+<meta name="description" content="Dashboard SPY temps réel — VIX Régime, US-MOPI, Stress Rebound Engine, SPY Arena."/>
+<script src="/js/i18n.js"></script>
+<script>I18n.init();</script>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+<style>
+:root {
+  --bg: #0d0f14;
+  --card: #12151c;
+  --border: #1e2330;
+  --txt1: #e8eaf0;
+  --txt2: #8892a4;
+  --accent: #3b82f6;
+  --green: #10B981;
+  --red: #EF4444;
+  --orange: #F97316;
+  --yellow: #F59E0B;
+  --purple: #8B5CF6;
+  --cyan: #06B6D4;
+  --gray: #6B7280;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--txt1); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; }
+
+header {
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+  padding: 14px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+header h1 { font-size: 18px; font-weight: 700; letter-spacing: -.3px; }
+header .sub { font-size: 12px; color: var(--txt2); }
+.nav-link {
+  font-size: 12px; color: var(--accent); text-decoration: none;
+  padding: 5px 10px; border: 1px solid var(--accent); border-radius: 6px;
+}
+.nav-link:hover { background: var(--accent); color: #fff; }
+
+.container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+.grid-4 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 16px; }
+.grid-full { margin-bottom: 16px; }
+
+@media (max-width: 900px) {
+  .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 600px) {
+  .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+  header h1 { font-size: 15px; }
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+.card-title {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 1px; color: var(--txt2); margin-bottom: 12px;
+}
+
+.big-number {
+  font-size: 36px; font-weight: 800; line-height: 1;
+}
+.label-badge {
+  display: inline-block;
+  padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .5px;
+}
+.row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.row-label { font-size: 12px; color: var(--txt2); }
+.row-value { font-size: 13px; font-weight: 600; }
+
+.regime-block {
+  border-left: 3px solid var(--accent);
+  padding: 12px 14px;
+  background: rgba(255,255,255,.02);
+  border-radius: 0 8px 8px 0;
+  margin-bottom: 12px;
+}
+.regime-name { font-size: 18px; font-weight: 800; }
+.regime-desc { font-size: 12px; color: var(--txt2); margin-top: 4px; line-height: 1.5; }
+
+.prob-bar-container { margin-bottom: 10px; }
+.prob-bar-label { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
+.prob-bar { height: 8px; border-radius: 4px; background: var(--border); overflow: hidden; }
+.prob-bar-fill { height: 100%; border-radius: 4px; transition: width .4s; }
+
+.mopi-arc { text-align: center; padding: 10px; }
+#mopi-chart { width: 100%; height: 180px; }
+
+.engine-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 0; border-bottom: 1px solid var(--border);
+}
+.engine-row:last-child { border-bottom: none; }
+.engine-name { font-size: 12px; font-weight: 600; }
+.engine-prob { font-size: 14px; font-weight: 800; }
+.engine-dir {
+  font-size: 10px; font-weight: 700;
+  padding: 2px 7px; border-radius: 10px;
+}
+.dir-up { background: rgba(16,185,129,.2); color: var(--green); }
+.dir-down { background: rgba(239,68,68,.2); color: var(--red); }
+.dir-neutral { background: rgba(107,114,128,.2); color: var(--gray); }
+
+.factor-chip {
+  display: inline-block; padding: 4px 10px;
+  background: rgba(59,130,246,.1); border: 1px solid rgba(59,130,246,.3);
+  border-radius: 20px; font-size: 11px; color: #93c5fd; margin: 3px;
+}
+
+.stale-banner {
+  background: rgba(239,68,68,.1); border: 1px solid rgba(239,68,68,.3);
+  color: var(--red); padding: 10px 16px; border-radius: 8px;
+  font-size: 12px; text-align: center; margin-bottom: 16px; display: none;
+}
+
+.status-dot {
+  display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+  margin-right: 6px; vertical-align: middle;
+}
+.dot-green { background: var(--green); box-shadow: 0 0 6px var(--green); }
+.dot-red { background: var(--red); }
+.dot-yellow { background: var(--yellow); }
+
+.leaderboard-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.leaderboard-table th {
+  text-align: left; padding: 6px 8px;
+  color: var(--txt2); font-weight: 600; border-bottom: 1px solid var(--border);
+}
+.leaderboard-table td { padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,.04); }
+.leaderboard-table tr:last-child td { border-bottom: none; }
+
+.section-title {
+  font-size: 12px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 1px; color: var(--txt2); margin: 24px 0 12px;
+}
+
+.warming-badge {
+  font-size: 10px; color: var(--yellow);
+  background: rgba(245,158,11,.1); padding: 2px 8px; border-radius: 10px;
+}
+
+.ts-display { font-size: 11px; color: var(--txt2); margin-top: 4px; }
+
+@media (max-width: 400px) {
+  .big-number { font-size: 28px; }
+  .container { padding: 12px; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>SPY Dashboard</h1>
+    <div class="sub">VIX · US-MOPI · Stress Rebound · SPY Arena</div>
+  </div>
+  <a href="/options_analyzer.html" class="nav-link">← BTC Options</a>
+</header>
+
+<div class="container">
+  <div id="stale-banner" class="stale-banner">
+    Données SPY indisponibles ou périmées. Worker en cours de chargement...
+  </div>
+
+  <!-- SPY Price + VIX Summary -->
+  <div class="section-title">Marché en temps réel</div>
+  <div class="grid-4">
+    <div class="card">
+      <div class="card-title">SPY Prix</div>
+      <div class="big-number" id="spy-price">--</div>
+      <div class="ts-display" id="spy-chg">--</div>
+    </div>
+    <div class="card">
+      <div class="card-title">VIX</div>
+      <div class="big-number" id="vix-val">--</div>
+      <div class="ts-display" id="vix-chg">Variation 1j : --</div>
+    </div>
+    <div class="card">
+      <div class="card-title">IV Rank (1 an)</div>
+      <div class="big-number" id="iv-rank">--</div>
+      <div class="ts-display" id="iv-pct">Percentile : --</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Dernière MAJ</div>
+      <div id="last-update" style="font-size:13px;font-weight:600;margin-top:4px;">--</div>
+      <div class="ts-display"><span class="status-dot dot-green" id="status-dot"></span><span id="status-txt">Actif</span></div>
+    </div>
+  </div>
+
+  <!-- VIX Régime -->
+  <div class="section-title">VIX Regime Engine</div>
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">Régime VIX</div>
+      <div class="regime-block" id="vix-regime-block">
+        <div class="regime-name" id="vix-regime-name">--</div>
+        <div class="regime-desc" id="vix-regime-desc">Chargement...</div>
+      </div>
+      <div class="row"><span class="row-label">VIX3M Spread (term struct.)</span><span class="row-value" id="vix-spread">--</span></div>
+      <div class="row"><span class="row-label">VIX9D / VIX Spread</span><span class="row-value" id="vix9d-spread">--</span></div>
+      <div class="row"><span class="row-label">Structure</span><span class="row-value" id="vix-contango">--</span></div>
+      <div class="row"><span class="row-label">VVIX (vol of vol)</span><span class="row-value" id="vvix-val">--</span></div>
+    </div>
+    <div class="card">
+      <div class="card-title">VIX Term Structure</div>
+      <div class="row"><span class="row-label">VIX (30j)</span><span class="row-value" id="ts-vix">--</span></div>
+      <div class="row"><span class="row-label">VIX9D (9j)</span><span class="row-value" id="ts-vix9d">--</span></div>
+      <div class="row"><span class="row-label">VIX3M (93j)</span><span class="row-value" id="ts-vix3m">--</span></div>
+      <div class="row"><span class="row-label">VIX6M (183j)</span><span class="row-value" id="ts-vix6m">--</span></div>
+      <div class="row"><span class="row-label">Variation 5j</span><span class="row-value" id="vix-chg5">--</span></div>
+      <div class="row"><span class="row-label">Percentile 1an</span><span class="row-value" id="vix-pct">--</span></div>
+    </div>
+  </div>
+
+  <!-- SPY Régime + Stress Rebound -->
+  <div class="section-title">SPY Regime Engine & Stress Rebound</div>
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">Régime SPY</div>
+      <div class="regime-block" id="spy-regime-block">
+        <div class="regime-name" id="spy-regime-name">--</div>
+        <div class="regime-desc" id="spy-regime-desc">Chargement...</div>
+      </div>
+      <div class="row"><span class="row-label">PCR Near (14j)</span><span class="row-value" id="pcr-near">--</span></div>
+      <div class="row"><span class="row-label">PCR Volume SPY</span><span class="row-value" id="pcr-vol">--</span></div>
+      <div class="row"><span class="row-label">PCR Equity CBOE</span><span class="row-value" id="pcr-equity">--</span></div>
+      <div class="row"><span class="row-label">Drawdown 3j</span><span class="row-value" id="spy-dd3">--</span></div>
+      <div class="row"><span class="row-label">Drawdown 5j</span><span class="row-value" id="spy-dd5">--</span></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Stress Rebound Engine</div>
+      <div id="rebound-confidence-row" class="row" style="margin-bottom:14px;">
+        <span class="row-label">Confidence</span>
+        <span class="label-badge" id="rebound-conf" style="background:rgba(107,114,128,.2);color:#9CA3AF;">--</span>
+      </div>
+      <div class="prob-bar-container">
+        <div class="prob-bar-label"><span>Rebond +1j</span><span id="prob1d">--</span></div>
+        <div class="prob-bar"><div class="prob-bar-fill" id="bar1d" style="width:0%;background:var(--cyan)"></div></div>
+      </div>
+      <div class="prob-bar-container">
+        <div class="prob-bar-label"><span>Rebond +3j</span><span id="prob3d">--</span></div>
+        <div class="prob-bar"><div class="prob-bar-fill" id="bar3d" style="width:0%;background:var(--cyan)"></div></div>
+      </div>
+      <div class="prob-bar-container">
+        <div class="prob-bar-label"><span>Rebond +5j</span><span id="prob5d">--</span></div>
+        <div class="prob-bar"><div class="prob-bar-fill" id="bar5d" style="width:0%;background:var(--cyan)"></div></div>
+      </div>
+      <div id="rebound-factors" style="margin-top:12px;"></div>
+    </div>
+  </div>
+
+  <!-- US-MOPI -->
+  <div class="section-title">US-MOPI — Options Pressure Index</div>
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">US-MOPI Score</div>
+      <div id="mopi-chart"></div>
+      <div style="text-align:center;margin-top:8px;">
+        <span class="label-badge" id="mopi-label" style="background:rgba(59,130,246,.2);color:#93c5fd;">--</span>
+      </div>
+      <div id="mopi-narrative" style="font-size:12px;color:var(--txt2);margin-top:10px;line-height:1.5;text-align:center;"></div>
+      <div id="mopi-contrarian" style="margin-top:10px;display:none;">
+        <span class="label-badge" id="mopi-contrarian-badge" style="background:rgba(245,158,11,.15);color:#FCD34D;font-size:11px;">--</span>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Composantes US-MOPI</div>
+      <div id="mopi-components"></div>
+    </div>
+  </div>
+
+  <!-- SPY Arena Phase 6 -->
+  <div class="section-title">SPY Arena — Phase 6</div>
+  <div class="card grid-full">
+    <div class="card-title">Moteurs prédictifs SPY (5 moteurs)</div>
+    <div class="row" style="margin-bottom:14px;">
+      <span style="font-size:12px;color:var(--txt2);">Consensus actif :</span>
+      <div>
+        <span class="engine-prob" id="consensus-prob">--</span>
+        <span class="engine-dir dir-neutral" id="consensus-dir" style="margin-left:8px;">--</span>
+      </div>
+    </div>
+    <div id="arena-engines"></div>
+  </div>
+
+  <!-- Arena Leaderboard -->
+  <div class="card grid-full">
+    <div class="card-title">Arena Leaderboard — WR / EV / PF</div>
+    <div style="overflow-x:auto;">
+      <table class="leaderboard-table" id="arena-leaderboard">
+        <thead>
+          <tr>
+            <th>Moteur</th><th>N</th><th title="Précision directionnelle (excl. RANGE et NEUTRAL)">Dir. WR</th><th>EV</th><th>PF</th><th>Statut</th>
+          </tr>
+        </thead>
+        <tbody id="leaderboard-body">
+          <tr><td colspan="6" style="color:var(--txt2);text-align:center;padding:20px;">Accumulation en cours...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Phase 8 — Multi-Index Tracker -->
+  <div class="section-title">Multi-Index Tracker — Phase 8</div>
+
+  <!-- Breadth résumé -->
+  <div class="card grid-full" id="breadth-card">
+    <div class="card-title">Largeur du marché (Market Breadth)</div>
+    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:12px;">
+      <div>
+        <span class="label-badge" id="breadth-label" style="font-size:13px;padding:5px 14px;background:rgba(59,130,246,.2);color:#93c5fd;">--</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-size:12px;color:var(--txt2);">Risk meter :</span>
+        <span class="label-badge" id="risk-on-label" style="background:rgba(107,114,128,.2);color:var(--gray);">--</span>
+        <span style="font-size:12px;color:var(--txt2);" id="risk-on-score"></span>
+      </div>
+    </div>
+    <div id="breadth-interpretation" style="font-size:13px;line-height:1.6;color:var(--txt1);margin-bottom:8px;"></div>
+    <div style="font-size:11px;color:var(--txt2);">
+      Strongest 1j : <span id="breadth-strongest" style="font-weight:700;color:var(--green);">--</span>
+      &nbsp;·&nbsp;
+      Weakest 1j : <span id="breadth-weakest" style="font-weight:700;color:var(--red);">--</span>
+    </div>
+  </div>
+
+  <!-- Grid des tickers -->
+  <div class="grid-4" id="multi-index-grid">
+    <!-- QQQ -->
+    <div class="card" id="card-qqq">
+      <div class="card-title">QQQ <span style="font-weight:400;text-transform:none;letter-spacing:0">Nasdaq 100</span></div>
+      <div class="big-number" id="qqq-price">--</div>
+      <div class="ts-display" id="qqq-chg1d" style="margin-top:4px;">--</div>
+      <div style="margin-top:10px;">
+        <div class="row"><span class="row-label">5j</span><span class="row-value" id="qqq-chg5d">--</span></div>
+        <div class="row"><span class="row-label">vs SPY 1j</span><span class="row-value" id="qqq-rel1d">--</span></div>
+        <div class="row"><span class="row-label">Dist. 52w High</span><span class="row-value" id="qqq-52w">--</span></div>
+      </div>
+    </div>
+    <!-- IWM -->
+    <div class="card" id="card-iwm">
+      <div class="card-title">IWM <span style="font-weight:400;text-transform:none;letter-spacing:0">Russell 2000</span></div>
+      <div class="big-number" id="iwm-price">--</div>
+      <div class="ts-display" id="iwm-chg1d" style="margin-top:4px;">--</div>
+      <div style="margin-top:10px;">
+        <div class="row"><span class="row-label">5j</span><span class="row-value" id="iwm-chg5d">--</span></div>
+        <div class="row"><span class="row-label">vs SPY 1j</span><span class="row-value" id="iwm-rel1d">--</span></div>
+        <div class="row"><span class="row-label">Dist. 52w High</span><span class="row-value" id="iwm-52w">--</span></div>
+      </div>
+    </div>
+    <!-- DIA -->
+    <div class="card" id="card-dia">
+      <div class="card-title">DIA <span style="font-weight:400;text-transform:none;letter-spacing:0">Dow Jones</span></div>
+      <div class="big-number" id="dia-price">--</div>
+      <div class="ts-display" id="dia-chg1d" style="margin-top:4px;">--</div>
+      <div style="margin-top:10px;">
+        <div class="row"><span class="row-label">5j</span><span class="row-value" id="dia-chg5d">--</span></div>
+        <div class="row"><span class="row-label">vs SPY 1j</span><span class="row-value" id="dia-rel1d">--</span></div>
+        <div class="row"><span class="row-label">Dist. 52w High</span><span class="row-value" id="dia-52w">--</span></div>
+      </div>
+    </div>
+    <!-- GLD + TLT empilés dans une colonne -->
+    <div>
+      <div class="card" id="card-gld" style="margin-bottom:16px;">
+        <div class="card-title">GLD <span style="font-weight:400;text-transform:none;letter-spacing:0">Gold</span></div>
+        <div style="font-size:22px;font-weight:800;" id="gld-price">--</div>
+        <div class="ts-display" id="gld-chg1d" style="margin-top:4px;">--</div>
+        <div class="row" style="margin-top:8px;"><span class="row-label">vs SPY 1j</span><span class="row-value" id="gld-rel1d">--</span></div>
+      </div>
+      <div class="card" id="card-tlt">
+        <div class="card-title">TLT <span style="font-weight:400;text-transform:none;letter-spacing:0">Long Bonds</span></div>
+        <div style="font-size:22px;font-weight:800;" id="tlt-price">--</div>
+        <div class="ts-display" id="tlt-chg1d" style="margin-top:4px;">--</div>
+        <div class="row" style="margin-top:8px;"><span class="row-label">vs SPY 1j</span><span class="row-value" id="tlt-rel1d">--</span></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const API = window.MAMOS_API_BASE || (location.protocol === 'file:' ? 'http://localhost:8000' : '');
+
+async function fetchJSON(path) {
+  const r = await fetch(API + path);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+function fmtNum(v, dec=2) {
+  if (v == null) return '--';
+  return Number(v).toFixed(dec);
+}
+
+function fmtPct(v) {
+  if (v == null) return '--';
+  const sign = v >= 0 ? '+' : '';
+  return `${sign}${Number(v).toFixed(2)}%`;
+}
+
+function colorPct(v) {
+  if (v == null) return 'var(--txt2)';
+  return v >= 0 ? 'var(--green)' : 'var(--red)';
+}
+
+function tsToTime(ts) {
+  if (!ts) return '--';
+  return new Date(ts * 1000).toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'});
+}
+
+// ── VIX Régime coleur ──
+function regimeColor(regime) {
+  const m = {
+    NORMAL:'#10B981', ELEVATED:'#F59E0B', STRESS:'#F97316',
+    PANIC:'#EF4444', PANIC_EXTREME:'#7C3AED', RELIEF_RALLY:'#06B6D4',
+    VOL_CRUSH:'#6B7280', UNKNOWN:'#6B7280',
+    RISK_ON_TREND:'#10B981', RISK_OFF_STRESS:'#F97316', PANIC_REBOUND:'#06B6D4',
+    VOL_EXPANSION:'#F59E0B', VOL_CONTRACTION:'#8B5CF6', COMPLACENCY:'#EF4444',
+    NEUTRAL:'#6B7280',
+  };
+  return m[regime] || '#6B7280';
+}
+
+// ── MOPI gauge ──
+let mopiChart = null;
+
+function initMopiChart() {
+  const el = document.getElementById('mopi-chart');
+  mopiChart = echarts.init(el, 'dark', {backgroundColor:'transparent'});
+}
+
+function updateMopiChart(score) {
+  if (!mopiChart) return;
+  const val = score != null ? score : 0;
+  mopiChart.setOption({
+    series: [{
+      type: 'gauge',
+      startAngle: 200, endAngle: -20,
+      min: 0, max: 100,
+      radius: '95%',
+      pointer: { itemStyle: { color: '#fff' }, length: '70%', width: 4 },
+      axisLine: {
+        lineStyle: {
+          width: 16,
+          color: [
+            [0.2, '#EF4444'], [0.35, '#F97316'], [0.5, '#F59E0B'],
+            [0.65, '#10B981'], [0.8, '#06B6D4'], [1, '#8B5CF6']
+          ]
+        }
+      },
+      axisTick: { show: false },
+      splitLine: { show: false },
+      axisLabel: { show: false },
+      detail: {
+        valueAnimation: true,
+        formatter: v => v.toFixed(0),
+        fontSize: 32, fontWeight: 800, color: '#e8eaf0', offsetCenter: [0, '40%']
+      },
+      data: [{ value: val }]
+    }]
+  });
+}
+
+// ── Render composantes MOPI ──
+function renderMopiComponents(components, weights) {
+  const el = document.getElementById('mopi-components');
+  if (!components || !Object.keys(components).length) {
+    el.innerHTML = '<div style="color:var(--txt2);font-size:12px;">Données insuffisantes</div>';
+    return;
+  }
+  const labels = {
+    pcr: 'PCR (Put/Call)', iv_rank: 'IV Rank', vix_regime: 'VIX Régime',
+    term_structure: 'Term Structure', drawdown: 'Drawdown ATH',
+  };
+  let html = '';
+  for (const [k, v] of Object.entries(components)) {
+    const w = weights && weights[k] ? (weights[k] * 100).toFixed(0) : '--';
+    const pct = v != null ? v.toFixed(1) : '--';
+    const color = v > 65 ? 'var(--green)' : v < 35 ? 'var(--red)' : 'var(--yellow)';
+    html += `
+      <div class="prob-bar-container" style="margin-bottom:12px;">
+        <div class="prob-bar-label">
+          <span style="color:var(--txt2)">${labels[k] || k} <small style="color:var(--txt2)">(poids ${w}%)</small></span>
+          <span style="color:${color};font-weight:700;">${pct}</span>
+        </div>
+        <div class="prob-bar">
+          <div class="prob-bar-fill" style="width:${Math.min(pct,100)}%;background:${color}"></div>
+        </div>
+      </div>`;
+  }
+  el.innerHTML = html;
+}
+
+// ── Render SPY Arena engines ──
+function renderArenaEngines(engines, consensus) {
+  // Consensus
+  if (consensus) {
+    document.getElementById('consensus-prob').textContent =
+      consensus.prob_up != null ? `${(consensus.prob_up*100).toFixed(1)}% UP` : '--';
+    const dirEl = document.getElementById('consensus-dir');
+    dirEl.textContent = consensus.direction || '--';
+    dirEl.className = `engine-dir dir-${(consensus.direction||'neutral').toLowerCase()}`;
+  }
+
+  const el = document.getElementById('arena-engines');
+  if (!engines) { el.innerHTML = '<div style="color:var(--txt2)">Chargement...</div>'; return; }
+
+  const labels = {
+    naive_spy: 'Naive SPY',
+    expert_v1_spy: 'Expert V1',
+    expert_v2_spy: 'Expert V2',
+    autocal_spy: 'AutoCal SPY',
+    ml_research_spy: 'ML Research',
+  };
+
+  let html = '';
+  for (const [key, eng] of Object.entries(engines)) {
+    const warming = eng.status && eng.status.startsWith('warming');
+    const dir = eng.direction || 'NEUTRAL';
+    const pUp = eng.prob_up != null ? (eng.prob_up * 100).toFixed(1) : '--';
+    const pDown = eng.prob_down != null ? (eng.prob_down * 100).toFixed(1) : '--';
+    html += `
+      <div class="engine-row">
+        <div>
+          <span class="engine-name">${labels[key] || key}</span>
+          ${warming ? `<span class="warming-badge" style="margin-left:6px;">warming</span>` : ''}
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          ${warming ? `<span style="color:var(--txt2);font-size:12px;">${eng.confidence || ''}</span>` : `
+          <span style="font-size:12px;color:var(--txt2);">UP <b style="color:var(--txt1)">${pUp}%</b></span>
+          <span style="font-size:12px;color:var(--txt2);">DN <b style="color:var(--txt1)">${pDown}%</b></span>
+          <span class="engine-dir dir-${dir.toLowerCase()}">${dir}</span>
+          `}
+        </div>
+      </div>`;
+  }
+  el.innerHTML = html || '<div style="color:var(--txt2);font-size:12px;">Aucun moteur disponible</div>';
+}
+
+// ── Render leaderboard ──
+function renderLeaderboard(leaderboard) {
+  const tbody = document.getElementById('leaderboard-body');
+  if (!leaderboard || !leaderboard.length) {
+    tbody.innerHTML = '<tr><td colspan="7" style="color:var(--txt2);text-align:center;padding:20px;">Accumulation en cours...</td></tr>';
+    return;
+  }
+  tbody.innerHTML = leaderboard.map(row => {
+    const n = row.n || 0;
+    // dir_winrate = précision sur prédictions directionnelles (exclut RANGE+NEUTRAL)
+    const dwr = row.dir_winrate != null ? `${(row.dir_winrate*100).toFixed(1)}%` : '--';
+    const dwrColor = row.dir_winrate > 0.52 ? 'var(--green)' : row.dir_winrate > 0.48 ? 'var(--yellow)' : row.dir_winrate != null ? 'var(--red)' : 'var(--txt2)';
+    const dirN = row.dir_n != null ? row.dir_n : '--';
+    const ev = row.ev != null ? row.ev.toFixed(3) : '--';
+    const pf = row.profit_factor != null ? row.profit_factor.toFixed(2) : '--';
+    const status = row.status || 'warming_up';
+    const statusColor = status === 'active' ? 'var(--green)' : status === 'exploring' ? 'var(--yellow)' : 'var(--gray)';
+    const evColor = row.ev > 0 ? 'var(--green)' : row.ev < 0 ? 'var(--red)' : 'var(--txt2)';
+    return `<tr>
+      <td style="font-weight:600">${row.engine}</td>
+      <td>${n}</td>
+      <td style="color:${dwrColor};font-weight:700">${dwr}<small style="color:var(--txt2);font-weight:400"> n=${dirN}</small></td>
+      <td style="color:${evColor};font-weight:600">${ev}</td>
+      <td>${pf}</td>
+      <td><span style="color:${statusColor};font-size:11px">${status}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Main render ──
+function renderSpy(d) {
+  // Status
+  const stale = d.stale;
+  document.getElementById('stale-banner').style.display = stale ? 'block' : 'none';
+  const dot = document.getElementById('status-dot');
+  dot.className = 'status-dot ' + (stale ? 'dot-red' : 'dot-green');
+  document.getElementById('status-txt').textContent = stale ? 'Données périmées' : 'Actif';
+
+  // Last update
+  const ts = d.ts;
+  document.getElementById('last-update').textContent = ts ? tsToTime(ts) : '--';
+
+  // SPY
+  const spy = d.spy || {};
+  const spyPrice = document.getElementById('spy-price');
+  spyPrice.textContent = spy.price != null ? `$${spy.price.toFixed(2)}` : '--';
+  const chgEl = document.getElementById('spy-chg');
+  chgEl.textContent = `${fmtPct(spy.change_1d)} aujourd'hui`;
+  chgEl.style.color = colorPct(spy.change_1d);
+
+  // VIX
+  const vix = d.vix || {};
+  const vixEl = document.getElementById('vix-val');
+  vixEl.textContent = vix.current != null ? vix.current.toFixed(2) : '--';
+  vixEl.style.color = vix.current > 30 ? 'var(--red)' : vix.current > 20 ? 'var(--orange)' : vix.current > 15 ? 'var(--yellow)' : 'var(--green)';
+  const vixChg = document.getElementById('vix-chg');
+  vixChg.textContent = `Variation 1j : ${fmtNum(vix.change_1d, 2)} pts`;
+  vixChg.style.color = vix.change_1d > 0 ? 'var(--red)' : 'var(--green)';
+
+  document.getElementById('iv-rank').textContent = vix.iv_rank != null ? `${vix.iv_rank.toFixed(0)}` : '--';
+  document.getElementById('iv-pct').textContent = `Percentile : ${fmtNum(vix.percentile, 1)}%`;
+
+  // Term structure
+  document.getElementById('ts-vix').textContent = fmtNum(vix.current, 2);
+  document.getElementById('ts-vix9d').textContent = fmtNum(vix.vix9d, 2);
+  document.getElementById('ts-vix3m').textContent = fmtNum(vix.vix3m, 2);
+  document.getElementById('ts-vix6m').textContent = fmtNum(vix.vix6m, 2);
+  document.getElementById('vix-chg5').textContent = `${fmtNum(vix.change_5d, 2)} pts`;
+  document.getElementById('vix-pct').textContent = `${fmtNum(vix.percentile, 1)}%`;
+
+  document.getElementById('vix-spread').textContent = vix.vix_vix3m_spread != null
+    ? `${vix.vix_vix3m_spread > 0 ? '+' : ''}${vix.vix_vix3m_spread.toFixed(2)}` : '--';
+  document.getElementById('vix9d-spread').textContent = vix.vix9d_vix_spread != null
+    ? `${vix.vix9d_vix_spread > 0 ? '+' : ''}${vix.vix9d_vix_spread.toFixed(2)}` : '--';
+  document.getElementById('vix-contango').textContent = vix.contango === 1 ? 'Contango' : vix.contango === 0 ? 'Backwardation' : '--';
+  document.getElementById('vvix-val').textContent = fmtNum(vix.vvix, 2);
+
+  // VIX Régime
+  const vr = d.vix_regime || {};
+  const vrName = document.getElementById('vix-regime-name');
+  vrName.textContent = vr.regime || '--';
+  vrName.style.color = vr.color || 'var(--txt1)';
+  document.getElementById('vix-regime-desc').textContent = vr.description || '';
+  const vrBlock = document.getElementById('vix-regime-block');
+  vrBlock.style.borderLeftColor = vr.color || 'var(--accent)';
+
+  // SPY Régime
+  const sr = d.spy_regime || {};
+  const srName = document.getElementById('spy-regime-name');
+  srName.textContent = sr.regime || '--';
+  srName.style.color = sr.color || 'var(--txt1)';
+  document.getElementById('spy-regime-desc').textContent = sr.description || '';
+  const srBlock = document.getElementById('spy-regime-block');
+  srBlock.style.borderLeftColor = sr.color || 'var(--accent)';
+
+  // PCR
+  const pcr = d.pcr || {};
+  document.getElementById('pcr-near').textContent = fmtNum(pcr.spy_near, 3);
+  document.getElementById('pcr-vol').textContent = fmtNum(pcr.spy_volume, 3);
+  document.getElementById('pcr-equity').textContent = fmtNum(pcr.equity, 3);
+  document.getElementById('spy-dd3').textContent = fmtPct(spy.drawdown_3d);
+  document.getElementById('spy-dd5').textContent = fmtPct(spy.drawdown_5d);
+
+  // Stress Rebound
+  const rb = d.stress_rebound || {};
+  const confMap = {
+    VALIDATED: {color:'var(--green)', bg:'rgba(16,185,129,.15)'},
+    MODERATE: {color:'var(--yellow)', bg:'rgba(245,158,11,.15)'},
+    EXPLORATION: {color:'var(--orange)', bg:'rgba(249,115,22,.15)'},
+    NO_TRIGGER: {color:'var(--gray)', bg:'rgba(107,114,128,.15)'},
+    NO_DATA: {color:'var(--gray)', bg:'rgba(107,114,128,.15)'},
+  };
+  const confStyle = confMap[rb.confidence] || confMap.NO_DATA;
+  const confEl = document.getElementById('rebound-conf');
+  confEl.textContent = rb.confidence || '--';
+  confEl.style.background = confStyle.bg;
+  confEl.style.color = confStyle.color;
+
+  function setBar(idVal, idBar, val) {
+    document.getElementById(idVal).textContent = val != null ? `${val.toFixed(1)}%` : '--';
+    document.getElementById(idBar).style.width = val != null ? `${Math.min(val, 80)}%` : '0%';
+    document.getElementById(idBar).style.background = val > 60 ? 'var(--green)' : val > 55 ? 'var(--cyan)' : 'var(--gray)';
+  }
+  setBar('prob1d', 'bar1d', rb.prob_1d);
+  setBar('prob3d', 'bar3d', rb.prob_3d);
+  setBar('prob5d', 'bar5d', rb.prob_5d);
+
+  const factorsEl = document.getElementById('rebound-factors');
+  const factors = rb.factors || [];
+  factorsEl.innerHTML = factors.length
+    ? factors.map(f => `<span class="factor-chip">${f}</span>`).join('')
+    : `<span style="color:var(--txt2);font-size:12px;">Aucun trigger actif</span>`;
+
+  // US-MOPI
+  const mopi = d.us_mopi || {};
+  updateMopiChart(mopi.score);
+  document.getElementById('mopi-label').textContent = (mopi.label || '--').replace(/_/g,' ');
+  document.getElementById('mopi-narrative').textContent = mopi.narrative || '';
+  const contrDiv = document.getElementById('mopi-contrarian');
+  if (mopi.contrarian_signal) {
+    contrDiv.style.display = 'block';
+    document.getElementById('mopi-contrarian-badge').textContent = mopi.contrarian_signal.replace(/_/g,' ');
+  } else {
+    contrDiv.style.display = 'none';
+  }
+  renderMopiComponents(mopi.components, mopi.weights);
+}
+
+async function loadSpy() {
+  try {
+    const d = await fetchJSON('/api/spy');
+    renderSpy(d);
+  } catch(e) {
+    document.getElementById('stale-banner').style.display = 'block';
+    document.getElementById('stale-banner').textContent = `Erreur chargement SPY : ${e.message}`;
+    console.error('[spy] dashboard error:', e);
+  }
+}
+
+async function loadArena() {
+  try {
+    const d = await fetchJSON('/api/spy/arena');
+    // Leaderboard always available (historical data)
+    if (d.leaderboard) renderLeaderboard(d.leaderboard);
+    // Live predictions only when fresh data available
+    if (!d.stale && d.engines && Object.keys(d.engines).length > 0) {
+      renderArenaEngines(d.engines, d.consensus);
+    } else if (d.stale) {
+      const el = document.getElementById('arena-engines');
+      if (el) el.innerHTML = '<div style="color:var(--txt2);font-size:12px;padding:8px 0;">Prédictions live indisponibles — marché fermé (week-end/hors-heures). Leaderboard historique ci-dessous.</div>';
+    }
+  } catch(e) {
+    console.error('[spy] arena error:', e);
+  }
+}
+
+// ── Multi-Index helpers ──
+const RISK_ON_COLORS = {
+  RISK_ON:       {bg:'rgba(16,185,129,.2)',  color:'var(--green)'},
+  MILD_RISK_ON:  {bg:'rgba(6,182,212,.15)',  color:'var(--cyan)'},
+  NEUTRAL:       {bg:'rgba(107,114,128,.2)', color:'var(--gray)'},
+  MILD_RISK_OFF: {bg:'rgba(249,115,22,.15)', color:'var(--orange)'},
+  RISK_OFF:      {bg:'rgba(239,68,68,.2)',   color:'var(--red)'},
+};
+const BREADTH_COLORS = {
+  BROAD_RALLY:   'var(--green)',
+  WIDE:          'var(--cyan)',
+  MIXED:         'var(--yellow)',
+  NARROW:        'var(--orange)',
+  BROAD_SELLOFF: 'var(--red)',
+  NO_DATA:       'var(--gray)',
+};
+const TICKER_NAMES = {qqq:'QQQ',iwm:'IWM',dia:'DIA',gld:'GLD',tlt:'TLT'};
+
+function renderMultiTicker(key, data) {
+  const p = data || {};
+  const price = p.price != null ? `$${p.price.toFixed(2)}` : '--';
+  const chg1d = p.change_1d;
+  const chg5d = p.change_5d;
+  const rel1d = p.rel_spy_1d;
+  const dist52 = p.dist_52w_high;
+
+  const el = id => document.getElementById(`${key}-${id}`);
+  if (!el('price')) return;
+
+  el('price').textContent = price;
+
+  const chgEl = el('chg1d');
+  if (chgEl) {
+    chgEl.textContent = chg1d != null ? `${fmtPct(chg1d)} aujourd'hui` : '--';
+    chgEl.style.color = colorPct(chg1d);
+  }
+  const chg5El = el('chg5d');
+  if (chg5El) {
+    chg5El.textContent = fmtPct(chg5d);
+    chg5El.style.color = colorPct(chg5d);
+  }
+  const relEl = el('rel1d');
+  if (relEl) {
+    relEl.textContent = rel1d != null ? (rel1d >= 0 ? `+${rel1d.toFixed(2)}%` : `${rel1d.toFixed(2)}%`) : '--';
+    relEl.style.color = colorPct(rel1d);
+  }
+  const w52El = el('52w');
+  if (w52El) {
+    w52El.textContent = dist52 != null ? `${dist52.toFixed(1)}%` : '--';
+    w52El.style.color = dist52 != null && dist52 > -3 ? 'var(--green)' : 'var(--yellow)';
+  }
+}
+
+function renderBreadth(b) {
+  if (!b || !b.label) return;
+  const labelEl = document.getElementById('breadth-label');
+  const bColor = BREADTH_COLORS[b.label] || 'var(--gray)';
+  labelEl.textContent = (b.label || '--').replace(/_/g,' ');
+  labelEl.style.color = bColor;
+  labelEl.style.background = bColor.replace('var(--','rgba(').replace(')',', .15)') || 'rgba(59,130,246,.2)';
+
+  const risk = b.risk_on_label || 'NEUTRAL';
+  const rStyle = RISK_ON_COLORS[risk] || RISK_ON_COLORS.NEUTRAL;
+  const rEl = document.getElementById('risk-on-label');
+  rEl.textContent = risk.replace(/_/g,' ');
+  rEl.style.background = rStyle.bg;
+  rEl.style.color = rStyle.color;
+
+  const scoreEl = document.getElementById('risk-on-score');
+  if (scoreEl) scoreEl.textContent = b.risk_on_score != null ? `(${b.risk_on_score.toFixed(0)}/100)` : '';
+
+  const interpEl = document.getElementById('breadth-interpretation');
+  if (interpEl) interpEl.textContent = b.interpretation || '';
+
+  const strongEl = document.getElementById('breadth-strongest');
+  const weakEl   = document.getElementById('breadth-weakest');
+  if (strongEl) strongEl.textContent = b.strongest_1d ? TICKER_NAMES[b.strongest_1d] || b.strongest_1d : '--';
+  if (weakEl)   weakEl.textContent   = b.weakest_1d   ? TICKER_NAMES[b.weakest_1d]   || b.weakest_1d   : '--';
+}
+
+async function loadMultiIndex() {
+  try {
+    const d = await fetchJSON('/api/multi_index');
+    if (d.stale || !d.tickers) return;
+    ['qqq','iwm','dia','gld','tlt'].forEach(k => renderMultiTicker(k, d.tickers[k]));
+    renderBreadth(d.breadth);
+  } catch(e) {
+    console.error('[spy] multi_index error:', e);
+  }
+}
+
+// Init
+initMopiChart();
+loadSpy();
+loadArena();
+loadMultiIndex();
+
+// Refresh every 5min
+setInterval(() => { loadSpy(); loadArena(); loadMultiIndex(); }, 300_000);
+
+// Resize chart on window resize
+window.addEventListener('resize', () => { if (mopiChart) mopiChart.resize(); });
+</script>
+</body>
+</html>

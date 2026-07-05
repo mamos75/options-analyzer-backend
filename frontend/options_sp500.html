@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+<title>SPY / S&P 500 Options Dashboard | Mamos Crypto</title>
+<meta name="description" content="Dashboard options SPY — Régime, PCR, Stress Rebound, US-MOPI, Arena prédictif."/>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+<style>
+:root {
+  --bg:#0d0f14; --card:#12151c; --border:#1e2330;
+  --txt1:#e8eaf0; --txt2:#8892a4; --txt3:#4a5568;
+  --accent:#3b82f6; --green:#10B981; --red:#EF4444;
+  --orange:#F97316; --yellow:#F59E0B; --purple:#8B5CF6;
+  --cyan:#06B6D4; --gray:#6B7280;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--txt1);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:14px}
+
+header{
+  background:var(--card);border-bottom:1px solid var(--border);
+  padding:14px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;
+  position:sticky;top:0;z-index:50;backdrop-filter:blur(8px);
+}
+.header-left h1{font-size:17px;font-weight:700}
+.header-left .sub{font-size:11px;color:var(--txt2);margin-top:2px}
+.header-right{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.nav-link{
+  font-size:12px;color:var(--txt2);text-decoration:none;
+  padding:5px 10px;border:1px solid var(--border);border-radius:6px;transition:all .2s;
+}
+.nav-link:hover,.nav-link.active{border-color:var(--accent);color:var(--accent)}
+.status-pill{
+  display:inline-flex;align-items:center;gap:5px;
+  font-size:11px;color:var(--txt2);padding:4px 10px;
+  background:rgba(30,35,48,.6);border:1px solid var(--border);border-radius:20px;
+}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--gray)}
+.dot-live{background:var(--green);box-shadow:0 0 6px var(--green)}
+.dot-stale{background:var(--yellow)}
+
+.container{max-width:1200px;margin:0 auto;padding:20px}
+
+.stale-banner{
+  background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);
+  color:var(--yellow);padding:10px 14px;border-radius:8px;font-size:12px;
+  margin-bottom:16px;display:none;
+}
+
+.section-title{
+  font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;
+  color:var(--txt3);margin:24px 0 12px;
+}
+
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+.grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:16px}
+.grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:16px}
+.grid-full{margin-bottom:16px}
+
+.card{
+  background:var(--card);border:1px solid var(--border);border-radius:12px;
+  padding:16px;transition:border-color .2s;
+}
+.card:hover{border-color:rgba(59,130,246,.3)}
+.card-title{
+  font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;
+  color:var(--txt3);margin-bottom:10px;
+}
+.big-number{font-size:32px;font-weight:800;letter-spacing:-.5px;line-height:1}
+.sub-text{font-size:11px;color:var(--txt2);margin-top:4px}
+
+.row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid rgba(30,35,48,.6)}
+.row:last-child{border-bottom:none}
+.row-label{font-size:12px;color:var(--txt2)}
+.row-value{font-size:12px;font-weight:600}
+
+.regime-block{
+  padding:12px 14px;border-radius:8px;margin-bottom:12px;
+  border-left:3px solid var(--accent);background:rgba(59,130,246,.05);
+}
+.regime-name{font-size:16px;font-weight:800;letter-spacing:.5px;margin-bottom:4px}
+.regime-desc{font-size:12px;color:var(--txt2);line-height:1.5}
+
+.badge{
+  display:inline-block;padding:3px 10px;border-radius:20px;
+  font-size:11px;font-weight:700;letter-spacing:.5px;
+}
+
+.prob-bar-wrap{margin:8px 0}
+.prob-bar-label{display:flex;justify-content:space-between;font-size:11px;color:var(--txt2);margin-bottom:4px}
+.prob-bar{height:6px;background:rgba(255,255,255,.06);border-radius:4px;overflow:hidden}
+.prob-bar-fill{height:100%;border-radius:4px;transition:width .5s}
+
+.arena-engine{
+  display:flex;align-items:center;gap:12px;padding:10px 0;
+  border-bottom:1px solid rgba(30,35,48,.6);
+}
+.arena-engine:last-child{border-bottom:none}
+.engine-name{font-size:12px;font-weight:600;color:var(--txt2);flex:1;min-width:120px}
+.engine-dir{
+  font-size:10px;font-weight:700;letter-spacing:.5px;
+  padding:2px 8px;border-radius:10px;
+}
+.dir-bull{background:rgba(16,185,129,.15);color:var(--green)}
+.dir-bear{background:rgba(239,68,68,.15);color:var(--red)}
+.dir-range{background:rgba(107,114,128,.15);color:var(--gray)}
+.engine-prob{font-size:18px;font-weight:800;min-width:50px;text-align:right}
+.engine-bar{flex:2;height:4px;background:rgba(255,255,255,.06);border-radius:2px;overflow:hidden}
+.engine-bar-fill{height:100%;border-radius:2px}
+
+.leaderboard-table{width:100%;border-collapse:collapse;font-size:12px}
+.leaderboard-table th{text-align:left;padding:8px 10px;color:var(--txt3);font-weight:600;border-bottom:1px solid var(--border);font-size:10px;letter-spacing:.8px}
+.leaderboard-table td{padding:8px 10px;border-bottom:1px solid rgba(30,35,48,.4)}
+.leaderboard-table tr:last-child td{border-bottom:none}
+
+#mopi-chart{height:120px}
+.mopi-narrative{font-size:12px;color:var(--txt2);line-height:1.6;margin-top:10px;text-align:center}
+
+@media(max-width:900px){.grid-3,.grid-4{grid-template-columns:1fr 1fr}}
+@media(max-width:600px){
+  .grid-2,.grid-3,.grid-4{grid-template-columns:1fr}
+  .header-left h1{font-size:15px}
+  .big-number{font-size:26px}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <h1>SPY / S&P 500</h1>
+    <div class="sub">Régime · PCR · Stress Rebound · US-MOPI · Arena</div>
+  </div>
+  <div class="header-right">
+    <a href="/tools/options-analyzer" class="nav-link">BTC Options</a>
+    <a href="/tools/options-sp500" class="nav-link active">SPY</a>
+    <a href="/tools/options-vix" class="nav-link">VIX</a>
+    <a href="/tools/options-indices" class="nav-link">Indices</a>
+    <div class="status-pill">
+      <span class="dot" id="status-dot"></span>
+      <span id="status-txt">—</span>
+    </div>
+  </div>
+</header>
+
+<div class="container">
+  <div class="stale-banner" id="stale-banner">Données SPY périmées — worker en cours de chargement...</div>
+
+  <!-- Marché temps réel -->
+  <div class="section-title">SPY en temps réel</div>
+  <div class="grid-4">
+    <div class="card">
+      <div class="card-title">SPY Prix</div>
+      <div class="big-number" id="spy-price">—</div>
+      <div class="sub-text" id="spy-chg1d">Variation 1j : —</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Drawdown</div>
+      <div class="big-number" id="spy-dd3" style="font-size:24px">—</div>
+      <div class="sub-text" id="spy-dd5">5j : —</div>
+    </div>
+    <div class="card">
+      <div class="card-title">PCR Near (14j)</div>
+      <div class="big-number" id="pcr-near" style="font-size:24px">—</div>
+      <div class="sub-text" id="pcr-vol">Volume : —</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Dernière MAJ</div>
+      <div id="last-update" style="font-size:13px;font-weight:600;margin-top:4px">—</div>
+      <div class="sub-text">PCR Equity CBOE : <span id="pcr-equity" style="font-weight:700">—</span></div>
+    </div>
+  </div>
+
+  <!-- SPY Régime -->
+  <div class="section-title">SPY Regime Engine</div>
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">Régime SPY</div>
+      <div class="regime-block" id="spy-regime-block" style="border-color:var(--gray)">
+        <div class="regime-name" id="spy-regime-name">—</div>
+        <div class="regime-desc" id="spy-regime-desc">Chargement...</div>
+      </div>
+      <div class="row"><span class="row-label">PCR Near (14j)</span><span class="row-value" id="pcr-near-2">—</span></div>
+      <div class="row"><span class="row-label">PCR Volume SPY</span><span class="row-value" id="pcr-vol-2">—</span></div>
+      <div class="row"><span class="row-label">PCR Equity CBOE</span><span class="row-value" id="pcr-eq-2">—</span></div>
+      <div class="row"><span class="row-label">Dist. 52w High</span><span class="row-value" id="spy-52w">—</span></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Stress Rebound Engine</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+        <span class="row-label">Confidence</span>
+        <span class="badge" id="rebound-conf" style="background:rgba(107,114,128,.2);color:var(--gray)">—</span>
+      </div>
+      <div class="prob-bar-wrap">
+        <div class="prob-bar-label"><span>Rebond +1j</span><span id="prob1d">—</span></div>
+        <div class="prob-bar"><div class="prob-bar-fill" id="bar1d" style="width:0%;background:var(--cyan)"></div></div>
+      </div>
+      <div class="prob-bar-wrap">
+        <div class="prob-bar-label"><span>Rebond +3j</span><span id="prob3d">—</span></div>
+        <div class="prob-bar"><div class="prob-bar-fill" id="bar3d" style="width:0%;background:var(--cyan)"></div></div>
+      </div>
+      <div class="prob-bar-wrap">
+        <div class="prob-bar-label"><span>Rebond +5j</span><span id="prob5d">—</span></div>
+        <div class="prob-bar"><div class="prob-bar-fill" id="bar5d" style="width:0%;background:var(--cyan)"></div></div>
+      </div>
+      <div id="rebound-factors" style="margin-top:12px;font-size:11px;color:var(--txt2)"></div>
+    </div>
+  </div>
+
+  <!-- US-MOPI -->
+  <div class="section-title">US-MOPI — Options Pressure Index</div>
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">US-MOPI Score</div>
+      <div id="mopi-chart"></div>
+      <div style="text-align:center;margin-top:8px">
+        <span class="badge" id="mopi-label" style="background:rgba(59,130,246,.2);color:#93c5fd">—</span>
+      </div>
+      <div class="mopi-narrative" id="mopi-narrative"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Composantes US-MOPI</div>
+      <div id="mopi-components"></div>
+    </div>
+  </div>
+
+  <!-- SPY Arena -->
+  <div class="section-title">SPY Arena — Moteurs Prédictifs</div>
+  <div class="card grid-full">
+    <div class="card-title">Consensus</div>
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+      <span style="font-size:12px;color:var(--txt2)">Consensus actif :</span>
+      <span class="engine-prob" id="consensus-prob">—</span>
+      <span class="engine-dir dir-range" id="consensus-dir">—</span>
+    </div>
+    <div id="arena-engines"></div>
+  </div>
+
+  <div class="card grid-full">
+    <div class="card-title">Arena Leaderboard</div>
+    <div style="overflow-x:auto">
+      <table class="leaderboard-table" id="arena-leaderboard">
+        <thead>
+          <tr>
+            <th>Moteur</th><th>N</th><th>Dir. WR</th><th>EV</th><th>PF</th><th>Statut</th>
+          </tr>
+        </thead>
+        <tbody id="leaderboard-body">
+          <tr><td colspan="6" style="color:var(--txt2);text-align:center;padding:20px">Accumulation en cours...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = window.MAMOS_API_BASE || (location.protocol === 'file:' ? 'http://localhost:8000' : '');
+let mopiChart = null;
+
+async function fetchJSON(path) {
+  const r = await fetch(API + path);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+function fmtNum(v, dec=2) { return v == null ? '—' : Number(v).toFixed(dec); }
+function fmtPct(v) { if (v == null) return '—'; const s = v>=0?'+':''; return `${s}${Number(v).toFixed(2)}%`; }
+function colorPct(v) { return v == null ? 'var(--txt2)' : v>=0 ? 'var(--green)' : 'var(--red)'; }
+function tsToTime(ts) { if (!ts) return '—'; return new Date(ts*1000).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}); }
+function tsToDate(ts) { if (!ts) return '—'; return new Date(ts*1000).toLocaleString('fr-FR',{hour:'2-digit',minute:'2-digit',day:'2-digit',month:'short'}); }
+
+function spyRegimeColor(regime) {
+  const m = {
+    RISK_ON_TREND:'#10B981',RISK_OFF_STRESS:'#F97316',PANIC_REBOUND:'#06B6D4',
+    VOL_EXPANSION:'#F59E0B',VOL_CONTRACTION:'#8B5CF6',COMPLACENCY:'#EF4444',NEUTRAL:'#6B7280',
+    UNKNOWN:'#6B7280',BULLISH:'#10B981',BEARISH:'#EF4444',
+  };
+  return m[regime] || '#6B7280';
+}
+
+function confColor(conf) {
+  const m = {HIGH:'rgba(16,185,129,.2)',MEDIUM:'rgba(245,158,11,.2)',LOW:'rgba(107,114,128,.2)',NO_DATA:'rgba(107,114,128,.15)'};
+  const tc = {HIGH:'var(--green)',MEDIUM:'var(--yellow)',LOW:'var(--gray)',NO_DATA:'var(--gray)'};
+  return [m[conf]||m.NO_DATA, tc[conf]||tc.NO_DATA];
+}
+
+function initMopiChart() {
+  const el = document.getElementById('mopi-chart');
+  mopiChart = echarts.init(el, 'dark', {backgroundColor:'transparent'});
+}
+
+function updateMopiChart(score) {
+  if (!mopiChart) return;
+  const s = score ?? 50;
+  const color = s < 35 ? '#EF4444' : s < 45 ? '#F97316' : s < 55 ? '#6B7280' : s < 65 ? '#10B981' : '#06B6D4';
+  mopiChart.setOption({
+    series:[{
+      type:'gauge',
+      radius:'90%',
+      min:0,max:100,
+      pointer:{length:'65%',width:3,itemStyle:{color}},
+      axisTick:{show:false},
+      splitLine:{show:false},
+      axisLabel:{show:false},
+      detail:{
+        value:s.toFixed(0),
+        fontSize:28,fontWeight:800,color:'var(--txt1)',
+        offsetCenter:[0,'55%'],
+      },
+      axisLine:{lineStyle:{width:10,color:[[s/100,color],[1,'rgba(255,255,255,.05)']]}},
+      data:[{value:s}]
+    }]
+  });
+}
+
+async function loadSpy() {
+  try {
+    const d = await fetchJSON('/api/spy');
+    const spy = d.spy||{};
+    const vix = d.vix||{};
+    const spyRegime = d.spy_regime||{};
+    const rebound = d.stress_rebound||{};
+    const mopi = d.us_mopi||{};
+    const pcr = d.pcr||{};
+
+    // Status
+    const stale = d.stale;
+    if (stale) document.getElementById('stale-banner').style.display='block';
+    document.getElementById('status-dot').className = 'dot ' + (stale ? 'dot-stale' : 'dot-live');
+    document.getElementById('status-txt').textContent = stale ? 'Stale' : 'Live';
+    document.getElementById('last-update').textContent = tsToDate(d.ts);
+
+    // SPY price
+    const price = spy.price;
+    document.getElementById('spy-price').textContent = price ? `$${fmtNum(price,2)}` : '—';
+    const chg = spy.change_1d;
+    const chgEl = document.getElementById('spy-chg1d');
+    chgEl.textContent = `Variation 1j : ${fmtPct(chg)}`;
+    if (chg != null) chgEl.style.color = colorPct(chg);
+
+    // Drawdown
+    const dd3 = spy.drawdown_3d;
+    document.getElementById('spy-dd3').textContent = fmtPct(dd3);
+    if (dd3 != null) document.getElementById('spy-dd3').style.color = colorPct(dd3);
+    const dd5 = spy.drawdown_5d;
+    document.getElementById('spy-dd5').textContent = `5j : ${fmtPct(dd5)}`;
+    if (dd5 != null) document.getElementById('spy-dd5').style.color = colorPct(dd5);
+
+    // PCR
+    document.getElementById('pcr-near').textContent = fmtNum(pcr.spy_near,3);
+    document.getElementById('pcr-vol').textContent = `Volume : ${fmtNum(pcr.spy_volume,3)}`;
+    document.getElementById('pcr-near-2').textContent = fmtNum(pcr.spy_near,3);
+    document.getElementById('pcr-vol-2').textContent = fmtNum(pcr.spy_volume,3);
+    document.getElementById('pcr-eq-2').textContent = fmtNum(pcr.equity,3);
+    document.getElementById('pcr-equity').textContent = fmtNum(pcr.equity,3);
+    const dist = spy.dist_52w_high;
+    const distEl = document.getElementById('spy-52w');
+    distEl.textContent = fmtPct(dist);
+    if (dist != null) distEl.style.color = dist >= 0 ? 'var(--green)' : 'var(--red)';
+
+    // SPY Regime
+    const regime = spyRegime.regime || 'UNKNOWN';
+    const color = spyRegimeColor(regime);
+    const block = document.getElementById('spy-regime-block');
+    block.style.borderColor = color;
+    block.style.background = color+'18';
+    document.getElementById('spy-regime-name').style.color = color;
+    document.getElementById('spy-regime-name').textContent = regime.replace(/_/g,' ');
+    document.getElementById('spy-regime-desc').textContent = spyRegime.description || '—';
+
+    // Stress Rebound
+    const [confBg, confTxt] = confColor(rebound.confidence);
+    const confEl = document.getElementById('rebound-conf');
+    confEl.style.background = confBg;
+    confEl.style.color = confTxt;
+    confEl.textContent = rebound.confidence || '—';
+    const p1 = (rebound.prob_1d||0)*100;
+    const p3 = (rebound.prob_3d||0)*100;
+    const p5 = (rebound.prob_5d||0)*100;
+    document.getElementById('prob1d').textContent = fmtNum(p1,0)+'%';
+    document.getElementById('bar1d').style.width = p1+'%';
+    document.getElementById('prob3d').textContent = fmtNum(p3,0)+'%';
+    document.getElementById('bar3d').style.width = p3+'%';
+    document.getElementById('prob5d').textContent = fmtNum(p5,0)+'%';
+    document.getElementById('bar5d').style.width = p5+'%';
+    const factors = rebound.factors || [];
+    document.getElementById('rebound-factors').innerHTML = factors.slice(0,4).map(f=>`<div>• ${f}</div>`).join('');
+
+    // US-MOPI
+    if (!mopiChart) initMopiChart();
+    updateMopiChart(mopi.score);
+    document.getElementById('mopi-label').textContent = mopi.label || '—';
+    document.getElementById('mopi-narrative').textContent = mopi.narrative || '';
+    const compsEl = document.getElementById('mopi-components');
+    const comps = mopi.components||{};
+    const weights = mopi.weights||{};
+    compsEl.innerHTML = Object.entries(comps).map(([k,v])=>`
+      <div class="row">
+        <span class="row-label">${k.replace(/_/g,' ')}</span>
+        <span class="row-value">${fmtNum(v,0)}<span style="font-size:10px;color:var(--txt3);font-weight:400"> (w:${fmtNum((weights[k]||0)*100,0)}%)</span></span>
+      </div>`).join('');
+    if (mopi.contrarian_signal) {
+      compsEl.innerHTML += `<div style="margin-top:12px;padding:8px;background:rgba(245,158,11,.08);border-radius:6px;font-size:11px;color:var(--yellow)">${mopi.contrarian_signal}</div>`;
+    }
+
+  } catch(e) {
+    document.getElementById('stale-banner').style.display='block';
+    document.getElementById('stale-banner').textContent = 'Erreur chargement données SPY : ' + e.message;
+    console.error(e);
+  }
+}
+
+async function loadArena() {
+  try {
+    const d = await fetchJSON('/api/spy/arena');
+    const consensus = d.consensus||{};
+    const dir = consensus.direction||'—';
+    document.getElementById('consensus-prob').textContent = consensus.probability!=null ? fmtNum(consensus.probability*100,0)+'%' : '—';
+    const dirEl = document.getElementById('consensus-dir');
+    dirEl.textContent = dir;
+    dirEl.className = 'engine-dir ' + (dir==='BULL'?'dir-bull':dir==='BEAR'?'dir-bear':'dir-range');
+
+    const engines = d.engines||[];
+    document.getElementById('arena-engines').innerHTML = engines.map(e=>{
+      const p = e.probability!=null ? e.probability*100 : null;
+      const pTxt = p!=null ? fmtNum(p,0)+'%' : '—';
+      const dClass = e.direction==='BULL'?'dir-bull':e.direction==='BEAR'?'dir-bear':'dir-range';
+      const barColor = e.direction==='BULL'?'var(--green)':e.direction==='BEAR'?'var(--red)':'var(--gray)';
+      return `<div class="arena-engine">
+        <span class="engine-name">${e.name||e.engine||'?'}</span>
+        <span class="engine-dir ${dClass}">${e.direction||'—'}</span>
+        <div class="engine-bar"><div class="engine-bar-fill" style="width:${p||0}%;background:${barColor}"></div></div>
+        <span class="engine-prob">${pTxt}</span>
+      </div>`;
+    }).join('');
+  } catch(e) { console.warn('[arena]',e); }
+
+  try {
+    const d = await fetchJSON('/api/spy/arena/leaderboard');
+    const rows = d.leaderboard||[];
+    if (!rows.length) return;
+    document.getElementById('leaderboard-body').innerHTML = rows.map(r=>{
+      const wr = r.directional_wr!=null ? fmtNum(r.directional_wr*100,1)+'%' : '—';
+      const ev = r.ev!=null ? (r.ev>=0?'+':'')+fmtNum(r.ev,3) : '—';
+      const pf = r.profit_factor!=null ? fmtNum(r.profit_factor,2) : '—';
+      const n = r.n_outcomes || 0;
+      const evColor = r.ev>0?'var(--green)':r.ev<0?'var(--red)':'var(--txt2)';
+      const status = r.status || (n<30?'⚠ accumul.':'✓ actif');
+      return `<tr>
+        <td style="font-weight:600">${r.engine||'?'}</td>
+        <td>${n}</td>
+        <td>${wr}</td>
+        <td style="color:${evColor}">${ev}</td>
+        <td>${pf}</td>
+        <td style="font-size:11px;color:var(--txt2)">${status}</td>
+      </tr>`;
+    }).join('');
+  } catch(e) { console.warn('[leaderboard]',e); }
+}
+
+async function init() {
+  await Promise.all([loadSpy(), loadArena()]);
+}
+
+init();
+setInterval(init, 120000);
+</script>
+</body>
+</html>

@@ -1,0 +1,116 @@
+{
+  "page": {
+    "title": "Mamos Crypto — BTC Trading Analytics Platform",
+    "description": "Options Analyzer, Mamos Trend Color and more — Mamos's crypto trading tools platform."
+  },
+  "options_analyzer": {
+    "page": {
+      "title": "Options Analyzer BTC — GEX · MOPI · Gravity Map | Mamos Crypto",
+      "description": "Real-time BTC options intelligence — GEX, MOPI, Gravity Map, Options Walls. Read the market like a market maker."
+    }
+  },
+  "mtc_dashboard": {
+    "page": {
+      "title": "Mamos Trend Color Dashboard — BTC Market Cycles | Mamos Crypto",
+      "description": "Mamos Trend Color — market cycles, accumulation phases, long-term BTC bias. The original Mamos indicator."
+    }
+  },
+  "nav": {
+    "tools": "Tools",
+    "roadmap": "Roadmap",
+    "about": "About",
+    "premium": "Premium — Coming Soon"
+  },
+  "hero": {
+    "badge": "MAMOS CRYPTO PLATFORM",
+    "title": "The analytical arsenal<br>of traders who <span class=\"accent\">win</span>",
+    "subtitle": "Options, market cycles, liquidity, AI — all your BTC analysis tools in one place.",
+    "cta_options": "Options Analyzer  →",
+    "cta_mtc": "MTC Dashboard  →",
+    "stat_live": "Live Tools",
+    "stat_dev": "In Development",
+    "stat_realtime": "Real-time"
+  },
+  "tools": {
+    "eyebrow": "Platform",
+    "title": "Your trading tools",
+    "subtitle": "Built by a trader, for serious traders. One hub. All the tools.",
+    "options": {
+      "desc": "GEX · MOPI · Volatility · Gravity Map · Options Walls<br>Real-time BTC options intelligence — read the market like a market maker.",
+      "cta": "Open dashboard →",
+      "source": "Deribit data"
+    },
+    "mtc": {
+      "desc": "Market cycles · Accumulation · Euphoria · MTC signals · Long-term bias<br>The original Mamos indicator — know where we are in the BTC cycle.",
+      "cta": "Explore MTC →",
+      "source": "Exclusive indicator"
+    },
+    "mi": {
+      "desc": "AI cross-market synthesis — whale activity, funding rates, aggregated sentiment into one decision."
+    },
+    "lm": {
+      "desc": "Liquidity map — hunting zones, institutional orderflow, visible stop levels."
+    },
+    "ai": {
+      "desc": "Conversational analysis — ask the market your questions, get an immediate actionable synthesis."
+    }
+  },
+  "badge": {
+    "soon": "COMING SOON"
+  },
+  "roadmap": {
+    "eyebrow": "Vision",
+    "title": "Roadmap",
+    "subtitle": "The platform evolves. Every tool delivered is one more brick in the arsenal.",
+    "current_label": "Current quarter",
+    "next_label": "Next quarter",
+    "future_label": "Long-term vision",
+    "current_badge": "IN PROGRESS",
+    "alerts": "Live Telegram Alerts",
+    "premium_system": "Premium System",
+    "public_api": "Public traders API"
+  },
+  "about": {
+    "eyebrow": "The human behind the tools",
+    "role": "Creator · Trader · Crypto indicator developer",
+    "bio": "I build tools I use myself to trade. No empty marketing — real systems, tested on real markets. The Mamos Trend Color has been used by thousands of French-speaking crypto traders for several years.",
+    "cred1": "Creator of <strong>Mamos Trend Color</strong> — TradingView indicator",
+    "cred2": "Creator of <strong>TAOM</strong> — exclusive market analysis indicator",
+    "cred3": "Developer of the <strong>BTC Options Analyzer</strong>",
+    "cred4": "<strong>Crypto content creator</strong> — YouTube FR (Mamos Crypto)"
+  },
+  "premium": {
+    "badge": "PREMIUM ACCESS — COMING SOON",
+    "title": "One subscription.<br>The entire Mamos ecosystem.",
+    "subtitle": "Monetization is coming. Get ready to access the entire platform with a single subscription.",
+    "plan_free": {
+      "tagline": "Always free",
+      "f1": "Options Analyzer (base)",
+      "f2": "MTC Dashboard",
+      "f3": "Real-time data",
+      "f4": "Telegram Alerts",
+      "f5": "Gravity Map (VIP)",
+      "f6": "Advanced tools",
+      "cta": "Current access"
+    },
+    "plan_premium": {
+      "tagline": "Price TBD — waitlist open",
+      "f1": "Everything in Free",
+      "f2": "Real-time Telegram alerts",
+      "f3": "Full Gravity Map",
+      "f4": "Market Intelligence",
+      "f5": "Liquidity Maps",
+      "f6": "AI Market Assistant",
+      "cta": "Join the waitlist →",
+      "disclaimer": "No CC required · Notified at launch"
+    }
+  },
+  "footer": {
+    "about": "About",
+    "copyright": "© 2026 Mamos Crypto — All rights reserved"
+  },
+  "waitlist": {
+    "email_subject": "Premium%20Waitlist%20Mamos%20Crypto",
+    "email_body": "Hi%20Mamos%2C%0A%0AI%20want%20to%20join%20the%20Premium%20waitlist.%0A%0AThanks!"
+  }
+}
