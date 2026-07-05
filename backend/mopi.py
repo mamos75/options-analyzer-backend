@@ -29,7 +29,8 @@ class MOPIScore:
     squeeze_component: float
     iv_rank: float
     pc_ratio: float           # backward compat = pc_ratio_global
-    squeeze_prob: float
+    mopi_squeeze_heuristic: float = 0.0  # B3: nom definitif (composant interne du score MOPI)
+    squeeze_prob: float = 0.0          # DEPRECATED — alias compat; sera supprime dans release suivante
     pc_ratio_global: float = 0.0         # structure totale toutes expiries, non pondéré
     pc_ratio_near: float = 0.0           # DTE ≤ 14j, non pondéré — pression immédiate brute
     pc_ratio_mid: float = 0.0            # 15-45j, non pondéré
@@ -79,8 +80,8 @@ def compute_mopi(
     pc_score = _pc_ratio_to_score(pc_ratio_weighted)
 
     # --- Composante Squeeze Probability (0-100) ---
-    squeeze_prob = _estimate_squeeze_prob(gex_profile, snapshot)
-    squeeze_score = squeeze_prob  # déjà 0-100
+    mopi_squeeze_heuristic_val = _estimate_squeeze_prob(gex_profile, snapshot)
+    squeeze_score = mopi_squeeze_heuristic_val  # déjà 0-100
 
     # Pondération
     weights = {"gex": 0.40, "iv": 0.25, "pc": 0.20, "squeeze": 0.15}
@@ -104,7 +105,8 @@ def compute_mopi(
         squeeze_component=round(squeeze_score, 1),
         iv_rank=round(iv_rank, 1),
         pc_ratio=round(pc_ratio_global, 3),          # backward compat
-        squeeze_prob=round(squeeze_prob, 1),
+        mopi_squeeze_heuristic=round(mopi_squeeze_heuristic_val, 1),
+        squeeze_prob=round(mopi_squeeze_heuristic_val, 1),  # DEPRECATED alias
         pc_ratio_global=round(pc_ratio_global, 3),
         pc_ratio_near=round(pc_ratio_near, 3),
         pc_ratio_mid=round(pc_ratio_mid, 3),

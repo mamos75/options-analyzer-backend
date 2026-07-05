@@ -43,8 +43,8 @@ class OptionsWall:
 @dataclass
 class OptionsWallsProfile:
     walls: List[OptionsWall]          # top 10 triés par OI décroissant
-    major_call_wall: float            # strike max call OI au-dessus spot
-    major_put_wall: float             # strike max put OI en-dessous spot
+    major_call_wall: Optional[float]  # strike max call OI au-dessus spot (None si aucun call wall)
+    major_put_wall: Optional[float]   # strike max put OI en-dessous spot (None si aucun put wall)
     oi_by_strike: Dict[float, dict]   # pour heatmap
     btc_price: float
 
@@ -103,7 +103,7 @@ def compute_options_walls(snapshot: MarketSnapshot) -> OptionsWallsProfile:
     totals = [v["total_oi"] for v in oi_by_strike.values()]
     if not totals:
         return OptionsWallsProfile(
-            walls=[], major_call_wall=spot, major_put_wall=spot,
+            walls=[], major_call_wall=None, major_put_wall=None,
             oi_by_strike={}, btc_price=spot,
         )
 
@@ -155,9 +155,9 @@ def compute_options_walls(snapshot: MarketSnapshot) -> OptionsWallsProfile:
 
     # Call wall = strike au-dessus spot avec le + de call OI
     above_calls = {s: v for s, v in call_oi.items() if s > spot}
-    major_call_wall = max(above_calls, key=above_calls.get) if above_calls else spot
+    major_call_wall = max(above_calls, key=above_calls.get) if above_calls else None
     below_puts = {s: v for s, v in put_oi.items() if s < spot}
-    major_put_wall = max(below_puts, key=below_puts.get) if below_puts else spot
+    major_put_wall = max(below_puts, key=below_puts.get) if below_puts else None
 
     return OptionsWallsProfile(
         walls=walls[:10],

@@ -17,7 +17,7 @@ Algorithme :
   - Normalisation robuste (médiane / IQR)
   - Poids de classe : compensent déséquilibre UP>>DOWN>>RANGE
   - Retrain automatique toutes les 24h (N ≥ 100 outcomes)
-  - Mode contrarian auto : WR dir < 40% sur N ≥ 50 → inversion UP↔DOWN
+  - Mode contrarian auto : Wilson 95% IC upper < 0.50 sur N ≥ 30 → inversion UP↔DOWN
   - Segmentation régime : poids softmax différents AMPLIFICATEUR vs STABILISANT
 """
 
@@ -34,6 +34,8 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
+
+from .wilson_utils import contrarian_significant, has_edge as _has_edge, wilson_lower
 
 log = logging.getLogger(__name__)
 
@@ -52,7 +54,8 @@ _N_FEATURES    = 22      # dimension du vecteur de features
 _ADAM_LR       = 0.005
 _L2_REG        = 0.05
 _EPOCHS        = 600
-_CONTRARIAN_THRESH = 0.40   # WR dir < 40% sur N ≥ 50 → inverser
+# _CONTRARIAN_THRESH supprimé : remplacé par test Wilson (contrarian_significant)
+# Voir wilson_utils.py — condition : wilson_upper(wr, n) < 0.50 avec n >= 30
 
 # Deltas de temps pour le momentum (secondes)
 _T_4H  = 4  * 3600
@@ -419,6 +422,8 @@ class BTCMomentumEngine:
         self._val_wr: Dict[str, float] = {}
         self._prod_contrarian: Dict[str, bool] = {}
         self._prod_contrarian_at: Dict[str, float] = {}
+        self._contrarian_decided_at: Dict[str, int] = {}   # B1: ts d'activation contrarian
+        self._n_dir_att_at_train: Dict[str, int] = {}      # B1: n_dir_att au moment du train
         for hz in _HORIZONS:
             self._models[hz] = _SoftmaxModel()
             self._scalers[hz] = _RobustScaler()
@@ -428,6 +433,8 @@ class BTCMomentumEngine:
             self._val_wr[hz] = 0.0
             self._prod_contrarian[hz] = False
             self._prod_contrarian_at[hz] = 0.0
+            self._contrarian_decided_at[hz] = 0
+            self._n_dir_att_at_train[hz] = 0
         self._load_all()
 
     def _model_path(self, hz: str) -> str:
@@ -566,15 +573,28 @@ class BTCMomentumEngine:
             dir_wr    = float(np.mean(val_preds[dir_mask] == y_val[dir_mask])) if dir_mask.sum() > 0 else 0.5
             n_dir_att = int(dir_mask.sum())
 
-            # Contrarian mode si WR dir < 40% avec assez de samples
-            contrarian = (dir_wr < _CONTRARIAN_THRESH) and (n_dir_att >= 30)
+            # Contrarian mode : Wilson 95% IC — upper < 0.50 signifie WR significativement < chance
+            # Remplace l'ancien seuil naïf 0.40 qui ignorait l'incertitude statistique
+            contrarian = contrarian_significant(dir_wr, n_dir_att)
             if contrarian:
-                log.warning(f"[bme] {horizon}: CONTRARIAN MODE actif (WR dir={dir_wr:.1%})")
+                from .wilson_utils import wilson_upper as _wu
+                _wu_val = _wu(dir_wr, n_dir_att) if n_dir_att > 0 else 1.0
+                log.warning(
+                    f"[bme] {horizon}: CONTRARIAN MODE actif "
+                    f"(WR dir={dir_wr:.1%} wilson_upper={_wu_val:.3f} n={n_dir_att})"
+                )
 
             # Sauvegarde
             self._models[horizon]     = model
             self._scalers[horizon]    = scaler
+            self._n_dir_att_at_train[horizon] = n_dir_att  # B1: pour OOS backtest
+            prev_contrarian = self._contrarian.get(horizon, False)
             self._contrarian[horizon] = contrarian
+            # B1: stocker quand le contrarian a été activé (pour filtrer l'éval OOS)
+            if contrarian and not prev_contrarian:
+                self._contrarian_decided_at[horizon] = int(time.time())
+            elif not contrarian:
+                self._contrarian_decided_at[horizon] = 0
             self._trained_at[horizon] = int(time.time())
             self._n_train[horizon]    = len(X_raw)
             self._val_wr[horizon]     = dir_wr
@@ -764,16 +784,18 @@ class BTCMomentumEngine:
             "version": self.version,
             "horizons": {
                 hz: {
-                    "trained_at":       self._trained_at.get(hz, 0),
-                    "n_train":          self._n_train.get(hz, 0),
-                    "val_wr":           round(self._val_wr.get(hz, 0.0), 3),
-                    "contrarian":       self._contrarian.get(hz, False),
-                    "prod_contrarian":  self._prod_contrarian.get(hz, False),
+                    "trained_at":          self._trained_at.get(hz, 0),
+                    "n_train":             self._n_train.get(hz, 0),
+                    "val_wr":              round(self._val_wr.get(hz, 0.0), 3),
+                    "contrarian":          self._contrarian.get(hz, False),
+                    "prod_contrarian":     self._prod_contrarian.get(hz, False),
                     "effective_contrarian": (
                         self._contrarian.get(hz, False) or self._prod_contrarian.get(hz, False)
                     ),
-                    "model_ready":      self._trained_at.get(hz, 0) > 0,
-                    "age_hours":        round((time.time() - self._trained_at.get(hz, 0)) / 3600, 1),
+                    # B1: contrarian_decided_at pour le frontend (badge CONTRARIAN)
+                    "contrarian_decided_at": self._contrarian_decided_at.get(hz, 0),
+                    "model_ready":         self._trained_at.get(hz, 0) > 0,
+                    "age_hours":           round((time.time() - self._trained_at.get(hz, 0)) / 3600, 1),
                 }
                 for hz in _HORIZONS
             },
@@ -781,49 +803,130 @@ class BTCMomentumEngine:
 
     def backtest(self, horizon: str, last_n: int = 200) -> dict:
         """
-        Backtest sur les derniers N outcomes — calcule WR dir et EV.
-        Utilisé pour valider le moteur avant promotion.
+        Backtest OUT-OF-SAMPLE avec embargo (Phase B1).
+
+        Protocole :
+        1. Reconstruit la frontiere train/OOS identique a train() : split 80%
+           des donnees triees par timestamp.
+        2. Embargo : exclut tout sample dont ts <= train_end_ts + horizon_secs
+           (la fenetre d'outcome chevauche le train).
+        3. En mode contrarian : evalue uniquement les samples posterieurs a
+           contrarian_decided_at (la decision etait post-hoc sinon).
+        4. Retourne has_edge (calcul Wilson serveur) + wilson_lb pour le frontend.
+
+        Champs retournes :
+          n_out_of_sample     : samples evalues (apres split + embargo)
+          n_overlap_excluded  : samples exclus par embargo
+          eval_is_oos         : True (garantie de non-contamination)
+          dir_winrate         : WR directionnel (null si insuffisant)
+          has_edge            : bool serveur (wilson_lower > 0.50 et n >= 30)
+          wilson_lb           : borne inferieure Wilson (observabilite)
+          contrarian_mode     : bool
+          contrarian_decided_at : ts d'activation (0 si inactif)
         """
         data, spots = self._get_training_data(horizon)
         if not data or self._trained_at.get(horizon, 0) == 0:
-            return {"error": "modèle non entraîné"}
+            return {"error": "modele non entraine"}
 
-        X_raw, y_raw, y_str = [], [], []
-        for ts, spot, opt_feats, label in data[-last_n:]:
+        # ── Horizon en secondes pour embargo ─────────────────────────────────
+        _horizon_secs = {"4h": 4*3600, "24h": 24*3600, "72h": 72*3600}
+        embargo_secs = _horizon_secs.get(horizon, 24*3600)
+
+        # ── Reconstruction frontiere train identique a train() ────────────────
+        # data est trie DESC par timestamp depuis _get_training_data (LIMIT 800)
+        # on inverse pour avoir ASC
+        data_asc = list(reversed(data))
+        n_total = len(data_asc)
+        split_internal = int(n_total * 0.8)
+        if split_internal >= n_total:
+            return {"error": "pas assez de samples pour split OOS"}
+
+        train_part = data_asc[:split_internal]
+        oos_part   = data_asc[split_internal:]
+
+        # ts de fin du train = dernier timestamp du train set
+        train_end_ts = train_part[-1][0] if train_part else 0
+        embargo_cutoff = train_end_ts + embargo_secs
+
+        # ── Contrarian : filtrer uniquement les samples post-decision ─────────
+        contrarian = self._contrarian.get(horizon, False) or self._prod_contrarian.get(horizon, False)
+        contrarian_decided_at = self._contrarian_decided_at.get(horizon, 0)
+
+        # ── Filtrage OOS + embargo ────────────────────────────────────────────
+        n_overlap_excluded = 0
+        oos_filtered = []
+        for row in oos_part:
+            ts = row[0]
+            if ts <= embargo_cutoff:
+                n_overlap_excluded += 1
+                continue
+            # En mode contrarian : ignorer les samples anterieurs a la decision
+            if contrarian and contrarian_decided_at > 0 and ts <= contrarian_decided_at:
+                n_overlap_excluded += 1
+                continue
+            oos_filtered.append(row)
+
+        # ── Evaluation OOS ────────────────────────────────────────────────────
+        if not oos_filtered:
+            if contrarian and contrarian_decided_at > 0:
+                return {
+                    "n_out_of_sample": 0,
+                    "n_overlap_excluded": n_overlap_excluded,
+                    "eval_is_oos": True,
+                    "dir_winrate": None,
+                    "reason": "contrarian_insufficient_oos",
+                    "has_edge": False,
+                    "wilson_lb": None,
+                    "contrarian_mode": contrarian,
+                    "contrarian_decided_at": contrarian_decided_at,
+                    "horizon": horizon,
+                }
+            return {"error": "aucun sample OOS valide apres embargo"}
+
+        X_raw, y_str = [], []
+        for ts, spot, opt_feats, label in oos_filtered:
             btc_f = extract_btc_features(spot, ts, spots)
-            opt_feats["spot"] = spot
-            vec = build_feature_vector(btc_f, opt_feats)
+            opt_feats_copy = dict(opt_feats)
+            opt_feats_copy["spot"] = spot
+            vec = build_feature_vector(btc_f, opt_feats_copy)
             if vec is not None and label in _LABEL_IDX:
                 X_raw.append(vec)
-                y_raw.append(_LABEL_IDX[label])
                 y_str.append(label)
 
         if not X_raw:
-            return {"error": "aucun sample valide"}
+            return {"error": "aucun sample OOS avec features valides"}
 
         X = self._scalers[horizon].transform(np.array(X_raw, dtype=np.float64))
         probs = self._models[horizon].predict_proba(X)
-        contrarian = self._contrarian.get(horizon, False)
         if contrarian:
             probs[:, [0, 1]] = probs[:, [1, 0]]
 
         preds = probs.argmax(axis=1)
         pred_str = [_IDX_LABEL[p] for p in preds]
 
-        n = len(y_str)
+        n_oos = len(y_str)
         dir_att = sum(1 for p, r in zip(pred_str, y_str) if p != "RANGE" and r != "RANGE")
         dir_cor = sum(1 for p, r in zip(pred_str, y_str) if p != "RANGE" and r != "RANGE" and p == r)
         dir_wr  = round(dir_cor / dir_att, 3) if dir_att > 0 else None
 
+        # ── Wilson bounds + has_edge (calcul serveur — B1.4) ─────────────────
+        wb_lb = round(wilson_lower(dir_wr, dir_att), 3) if dir_wr is not None and dir_att > 0 else None
+        edge = _has_edge(dir_wr, dir_att)  # n >= 30 ET wilson_lower > 0.50
+
         from collections import Counter
         return {
-            "n": n,
-            "n_dir_attempted": dir_att,
-            "dir_winrate": dir_wr,
-            "pred_distribution": Counter(pred_str),
-            "true_distribution": Counter(y_str),
-            "contrarian_mode": contrarian,
-            "horizon": horizon,
+            "n_out_of_sample":      n_oos,
+            "n_overlap_excluded":   n_overlap_excluded,
+            "eval_is_oos":          True,
+            "n_dir_attempted":      dir_att,
+            "dir_winrate":          dir_wr,
+            "has_edge":             edge,
+            "wilson_lb":            wb_lb,
+            "pred_distribution":    dict(Counter(pred_str)),
+            "true_distribution":    dict(Counter(y_str)),
+            "contrarian_mode":      contrarian,
+            "contrarian_decided_at": contrarian_decided_at,
+            "horizon":              horizon,
         }
 
 

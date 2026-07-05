@@ -221,8 +221,8 @@ async def _history_saver():
                     dex_actionable_btc=abs(dex_levels_h.actionable) if dex_levels_h else 0.0,
                     iv_rank=mopi.iv_rank,
                     pc_ratio_near=mopi.pc_ratio_near,
-                    put_wall=walls_h.major_put_wall,
-                    call_wall=walls_h.major_call_wall,
+                    put_wall=walls_h.major_put_wall or 0.0,
+                    call_wall=walls_h.major_call_wall or 0.0,
                     max_pain_strike=max_pain_strike_h,
                     max_pain_dte=max_pain_dte_h,
                     mopi_score=mopi.score,
@@ -269,8 +269,8 @@ async def _history_saver():
                         "gex_regime": gex.regime,
                         "max_pain_strike": max_pain_strike_h,
                         "max_pain_dte": max_pain_dte_h,
-                        "put_wall": walls_h.major_put_wall,
-                        "call_wall": walls_h.major_call_wall,
+                        "put_wall": walls_h.major_put_wall or 0.0,
+                        "call_wall": walls_h.major_call_wall or 0.0,
                         "funding_rate": bf_h.get("funding_rate"),
                         "futures_oi": bf_h.get("futures_oi"),
                         "spot_volume_24h": bf_h.get("spot_volume_24h"),
@@ -602,7 +602,8 @@ class DashboardResponse(BaseModel):
     mopi_pc_component: float     # composante Put/Call dans le score MOPI (0-100)
     iv_rank: float
     pc_ratio: float
-    squeeze_prob: float
+    mopi_squeeze_heuristic: float = 0.0  # B3: composant interne MOPI (heuristique)
+    squeeze_prob: float = 0.0          # DEPRECATED — alias compat pour frontend embarque
     weather_state: str
     weather_emoji: str
     weather_description: str
@@ -667,7 +668,8 @@ async def get_dashboard():
         mopi_pc_component=mopi.pc_ratio_component,
         iv_rank=mopi.iv_rank,
         pc_ratio=mopi.pc_ratio,
-        squeeze_prob=mopi.squeeze_prob,
+        mopi_squeeze_heuristic=mopi.mopi_squeeze_heuristic,
+        squeeze_prob=mopi.squeeze_prob,  # DEPRECATED alias
         weather_state=weather.state,
         weather_emoji=weather.emoji,
         weather_description=weather.description,
@@ -1420,8 +1422,8 @@ async def get_probability_engine():
         dex_actionable_btc=abs(dex_levels.actionable) if dex_levels else 0.0,
         iv_rank=mopi.iv_rank,
         pc_ratio_near=mopi.pc_ratio_near,
-        put_wall=walls.major_put_wall,
-        call_wall=walls.major_call_wall,
+        put_wall=walls.major_put_wall or 0.0,
+        call_wall=walls.major_call_wall or 0.0,
         max_pain_strike=max_pain_strike,
         max_pain_dte=max_pain_dte,
         mopi_score=mopi.score,
@@ -1998,7 +2000,7 @@ async def get_executive_summary():
             flip_use_in_signal=_flip_use_ex, dex_direction=dp.direction,
             dex_actionable_btc=abs(_dex_levels_ex.actionable) if _dex_levels_ex else 0.0,
             iv_rank=mopi.iv_rank, pc_ratio_near=mopi.pc_ratio_near,
-            put_wall=_pe_walls.major_put_wall, call_wall=_pe_walls.major_call_wall,
+            put_wall=_pe_walls.major_put_wall or 0.0, call_wall=_pe_walls.major_call_wall or 0.0,
             max_pain_strike=_mp_strike_ex, max_pain_dte=_mp_dte_ex,
             mopi_score=mopi.score, gex_regime=gex.regime,
             dex_score=(dp.pressure_pct + 100.0) / 2.0,
