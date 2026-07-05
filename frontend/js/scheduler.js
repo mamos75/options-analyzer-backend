@@ -8,7 +8,6 @@ import {
   vcPeriod
 } from './store.js';
 import { fmtPrice } from './lib/fmt.js';
-import { loadSignal } from './widgets/signal.js';
 import { loadLevels } from './widgets/levels.js';
 import { loadProbabilities } from './widgets/probabilities.js';
 import { loadContext } from './widgets/context.js';
@@ -55,13 +54,9 @@ export async function loadAllData() {
   await loadRegimeSummary(signal);
   if (seq !== getLoadSeq()) return;
 
-  // Load signal first (needed for levels)
-  const decisionData = await loadSignal(signal);
-  if (seq !== getLoadSeq()) return;
-
   // Load rest in parallel
   const results = await Promise.allSettled([
-    loadLevels(decisionData, signal),
+    loadLevels(signal),
     loadProbabilities(signal),
     loadContext(signal),
     loadVolWeather(signal),

@@ -19,8 +19,7 @@ frontend/
     │   ├── fmt.js          esc(), fmtPrice(), tagBadge(), fmtBig()
     │   └── canvas.js       drawSparkline(), drawDualAxis(), drawVcLine()
     └── widgets/
-        ├── signal.js        M1 — Signal principal
-        ├── levels.js        M2 — Niveaux clés (walls)
+        ├── levels.js        M1 — Niveaux clés (walls)
         ├── probabilities.js M3 — Probabilités haussier/baissier
         ├── context.js       M4 — Contexte (vol, dealer, MOPI, GEX)
         ├── narrative.js     M5 — Narrative IA

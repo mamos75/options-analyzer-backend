@@ -2,7 +2,7 @@
 import { apiFetch } from '../api.js';
 import { esc, fmtPrice, tagBadge } from '../lib/fmt.js';
 
-export async function loadLevels(decisionData, signal) {
+export async function loadLevels(signal) {
   const el = document.getElementById('m2-content');
   try {
     const wallsData = await apiFetch('/api/options_walls', signal);

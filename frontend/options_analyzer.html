@@ -334,39 +334,6 @@
     letter-spacing:.8px; margin-bottom:4px; }
   .regime-advice-text { font-size:12px; color:#b0bec5; line-height:1.6; }
 
-  /* ─── MODULE 1: SIGNAL PRINCIPAL ─── */
-  .signal-hero {
-    display: flex; flex-direction: column; gap: 8px;
-    animation: fadeIn 0.5s ease;
-  }
-  .signal-direction {
-    font-size: 52px; font-weight: 900; letter-spacing: -2px;
-    line-height: 1;
-  }
-  .signal-direction.haussier { color: var(--green); }
-  .signal-direction.baissier { color: var(--red); }
-  .signal-direction.neutre { color: var(--yellow); }
-
-  .signal-conviction {
-    display: flex; align-items: center; gap: 12px;
-    margin-top: 8px;
-  }
-  .conviction-bar-wrap {
-    flex: 1; max-width: 240px;
-    background: var(--card); border-radius: 4px; height: 6px; overflow: hidden;
-  }
-  .conviction-bar {
-    height: 100%; border-radius: 4px;
-    transition: width 1s cubic-bezier(0.4,0,0.2,1);
-  }
-  .conviction-label { font-size: 13px; font-weight: 600; color: var(--muted); }
-  .conviction-pct { font-size: 20px; font-weight: 800; }
-
-  .signal-watch {
-    font-size: 14px; color: rgba(232,234,240,0.7);
-    margin-top: 6px; font-weight: 400;
-    max-width: 600px;
-  }
 
   .warnings-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
   .warning-pill {
@@ -551,7 +518,6 @@
     .countdown { display: none; }
     .main { padding: 16px 12px 48px; gap: 14px; }
     .card { padding: 16px; }
-    .signal-direction { font-size: 36px; }
     .levels-grid { grid-template-columns: 1fr; }
     .dual-grid { grid-template-columns: 1fr; }
     .context-grid { grid-template-columns: 1fr 1fr; }
@@ -901,14 +867,6 @@
       </div>
     </div>
 
-    <!-- MODULE 1: SIGNAL PRINCIPAL -->
-    <div class="card" id="m1-signal">
-      <div class="card-label"><div class="card-label-dot" style="background:var(--blue)"></div>SIGNAL PRINCIPAL</div>
-      <div id="m1-content">
-        <div class="skeleton large" style="width:280px;margin-bottom:12px;"></div>
-        <div class="skeleton" style="width:200px;"></div>
-      </div>
-    </div>
 
     <!-- MODULE 2: NIVEAUX CLÉS (enrichi) -->
     <div class="card" id="m2-levels">
