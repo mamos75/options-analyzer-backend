@@ -3,6 +3,9 @@
 import { apiFetch } from '../api.js';
 import { esc } from '../lib/fmt.js';
 
+// F8.7 — Supprime le préfixe prix "$XX,XXX — " des labels
+const stripPrice = (lbl) => lbl ? lbl.replace(/^\$[\d,]+ — /, '') : lbl;
+
 const _VERDICT_CFG = {
   'SIGNAL_UP':   { icon: '▲', label: 'HAUSSIER',  color: '#22c55e', bg: '#22c55e0d', border: '#22c55e33' },
   'SIGNAL_DOWN': { icon: '▼', label: 'BAISSIER',  color: '#ef4444', bg: '#ef44440d', border: '#ef444433' },
@@ -31,6 +34,8 @@ export async function loadArbiterQuick(signal) {
     if (!dec) { el.innerHTML = '<div style="color:var(--muted);font-size:12px">Données indisponibles</div>'; return; }
 
     const verdict   = dec.verdict        || 'OBSERVE';
+    const action    = dec.action         || null;   // F8.3
+    const state     = dec.state          || null;   // F8.3
     const confPct   = dec.confidence_pct ?? 0;
     const phrase    = dec.phrase         || '';
     const dataStale = dec.data_quality === 'STALE';
@@ -55,6 +60,11 @@ export async function loadArbiterQuick(signal) {
     const lvlHautLbl = narr?.niveau_haut_label || null;
     const lvlBasLbl  = narr?.niveau_bas_label  || null;
 
+    // F8.6 — Flip zone stability
+    const flipZone = dec.flip_zone || null;
+    const flipStable = !flipZone || flipZone.stable !== false;
+    let triggerExtra = null;
+
     // Choix du niveau le plus pertinent selon le verdict
     let triggerLevel = null, triggerLbl = null, triggerAbove = null, triggerBelow = null;
     if (flipLvl && btcSpot) {
@@ -64,13 +74,24 @@ export async function loadArbiterQuick(signal) {
       triggerBelow = above ? 'cassure en-dessous = amplification baissière' : 'maintien en-dessous = pression baissière';
       triggerLbl = 'Gamma Flip';
     } else if (verdict === 'SIGNAL_UP' && lvlBas) {
-      triggerLevel = lvlBas; triggerLbl = lvlBasLbl || 'Support'; triggerAbove = 'au-dessus = signal valide'; triggerBelow = 'cassure = signal annulé';
+      triggerLevel = lvlBas; triggerLbl = stripPrice(lvlBasLbl) || 'Support';  // F8.7
+      triggerAbove = 'au-dessus = signal valide'; triggerBelow = 'cassure = signal annulé';
     } else if (verdict === 'SIGNAL_DOWN' && lvlHaut) {
-      triggerLevel = lvlHaut; triggerLbl = lvlHautLbl || 'Résistance'; triggerAbove = 'cassure = signal annulé'; triggerBelow = 'sous = pression baissière';
+      triggerLevel = lvlHaut; triggerLbl = stripPrice(lvlHautLbl) || 'Résistance';  // F8.7
+      triggerAbove = 'cassure = signal annulé'; triggerBelow = 'sous = pression baissière';
     } else if (lvlHaut || lvlBas) {
       triggerLevel = flipLvl || lvlHaut || lvlBas;
-      triggerLbl = flipLvl ? 'Gamma Flip' : lvlHaut ? (lvlHautLbl || 'Résistance') : (lvlBasLbl || 'Support');
+      triggerLbl = flipLvl ? 'Gamma Flip' : lvlHaut ? (stripPrice(lvlHautLbl) || 'Résistance') : (stripPrice(lvlBasLbl) || 'Support');  // F8.7
       triggerAbove = 'au-dessus = hausse'; triggerBelow = 'en-dessous = baisse';
+    }
+
+    // F8.6 — Override triggerLbl if flip is unstable
+    if (!flipStable && flipZone && flipZone.n >= 3 && flipZone.amplitude_pct >= 1.0) {
+      const zoneMin = Math.round(flipZone.min).toLocaleString();
+      const zoneMax = Math.round(flipZone.max).toLocaleString();
+      triggerLbl = flipZone.moving ? 'Flip en déplacement (expiration proche)' : 'Zone Gamma Flip (instable)';
+      if (flipZone.display) triggerLevel = flipZone.display;
+      triggerExtra = `Zone : $${zoneMin} – $${zoneMax}`;
     }
 
     const fmtP = v => v ? '$' + Math.round(v).toLocaleString() : null;
@@ -114,6 +135,7 @@ export async function loadArbiterQuick(signal) {
           <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#f59e0b;margin-bottom:4px">Le niveau</div>
           <div style="font-size:17px;font-weight:900;color:#f59e0b;font-variant-numeric:tabular-nums">${fmtP(triggerLevel)}</div>
           <div style="font-size:10px;color:var(--muted);margin-top:3px">${esc(triggerLbl || '')}</div>
+          ${triggerExtra ? `<div style="font-size:10px;color:#f59e0b;margin-top:3px">${esc(triggerExtra)}</div>` : ''}
           <div style="font-size:10px;color:#94a3b8;margin-top:6px;line-height:1.5">
             ▲ ${esc(triggerAbove || '')}<br>▼ ${esc(triggerBelow || '')}
           </div>

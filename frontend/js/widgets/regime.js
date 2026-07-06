@@ -40,6 +40,9 @@ const _SYSTEM_COLOR = {
   'OFFLINE':   '#475569',
 };
 
+// F8.7 — Supprime le préfixe prix "$XX,XXX — " des labels (le prix est déjà affiché en bold)
+const stripPrice = (lbl) => lbl ? lbl.replace(/^\$[\d,]+ — /, '') : lbl;
+
 export function buildLevelsContext(btcSpot, lvlFlip, lvlHaut, lvlBas, mpStrike, mpDte, mpExpiry, flipDistPct, vexBull, cexBull, lvlHautLbl, lvlBasLbl, walls) {
   const fmtP = v => v ? '$' + Math.round(v).toLocaleString() : null;
   const lines = [];
@@ -52,8 +55,8 @@ export function buildLevelsContext(btcSpot, lvlFlip, lvlHaut, lvlBas, mpStrike, 
   const _add = (s, col, lbl) => { if (!s) return; const k = Math.round(s); if (!_rMap.has(k)) _rMap.set(k, {col, lbls:[lbl]}); else _rMap.get(k).lbls.push(lbl); };
   _add(lvlFlip,   '#f59e0b', 'Gamma Flip — les dealers <i>changent de comportement</i> mécaniquement');
   _add(mpStrike,  '#3d8eff', 'Max Pain (' + (mpExpiry||'') + ') — le marché <i>gravite</i> vers ce niveau à expiration');
-  _add(lvlHaut,   '#22c55e', lvlHautLbl || 'Résistance options');
-  _add(lvlBas,    '#ef4444', lvlBasLbl  || 'Support options');
+  _add(lvlHaut,   '#22c55e', stripPrice(lvlHautLbl) || 'Résistance options');  // F8.7
+  _add(lvlBas,    '#ef4444', stripPrice(lvlBasLbl)  || 'Support options');  // F8.7
   const roles = [..._rMap.entries()].sort((a,b) => b[0]-a[0]).map(
     ([k, {col, lbls}]) => '<b style="color:' + col + '">' + fmtP(k) + '</b> = ' + lbls.join(' + ')
   );
@@ -345,12 +348,12 @@ export async function loadRegimeSummary(signal) {
         </div>` : ''}
         ${lvlHaut ? `
         <div style="background:#22c55e0d;border:1px solid #22c55e33;border-radius:10px;padding:10px 12px">
-          <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#22c55e;margin-bottom:3px">${lvlHautLbl ? esc(lvlHautLbl) : '▲ Résistance options'}</div>
+          <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#22c55e;margin-bottom:3px">${lvlHautLbl ? esc(stripPrice(lvlHautLbl)) : '▲ Résistance options'}  <!-- F8.7 --></div>
           <div style="font-size:15px;font-weight:800;color:#22c55e;font-variant-numeric:tabular-nums">${fmtP(lvlHaut)}</div>
         </div>` : ''}
         ${lvlBas ? `
         <div style="background:#ef44440d;border:1px solid #ef444433;border-radius:10px;padding:10px 12px">
-          <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#ef4444;margin-bottom:3px">${lvlBasLbl ? esc(lvlBasLbl) : '▼ Support options'}</div>
+          <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#ef4444;margin-bottom:3px">${lvlBasLbl ? esc(stripPrice(lvlBasLbl)) : '▼ Support options'}  <!-- F8.7 --></div>
           <div style="font-size:15px;font-weight:800;color:#ef4444;font-variant-numeric:tabular-nums">${fmtP(lvlBas)}</div>
         </div>` : ''}
         ${mpStrike ? `
