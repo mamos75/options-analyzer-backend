@@ -36,6 +36,51 @@ from .gex_activity_audit import GEXActivityAudit, FlipActivityAudit
 from .gravity_activity_audit import GravityActivityAudit
 from .options_activity_engine import TAG_DORMANT
 from .directional_bias import DirectionalBias, compute_directional_bias
+from .options_walls import OptionsWall as _OptionsWall
+
+
+def select_levels(walls_global, spot: float) -> dict:
+    """Sélecteur de niveaux unifié — F11.1.
+
+    Retourne resistance et support depuis les murs options,
+    en excluant les zones DORMANT. Fallback sur pool global si near vide.
+    """
+    walls = walls_global.walls if walls_global else []
+    active = [w for w in walls if getattr(w, "tag", "DORMANT") != "DORMANT"]
+    pool = active if active else walls
+
+    above = [w for w in pool if w.strike > spot * 1.002]
+    below = [w for w in pool if w.strike < spot * 0.998]
+
+    resistance = min(above, key=lambda w: w.strike) if above else None
+    support    = max(below, key=lambda w: w.strike) if below else None
+
+    post_exp = bool(not active and walls)
+    return {
+        "resistance": resistance,
+        "support": support,
+        "fallback": resistance is None or support is None,
+        "source": "post_expiration" if post_exp else "normal",
+    }
+
+
+def _wall_label(wall) -> str:
+    """Génère un label typé depuis les champs réels du mur — F11.2."""
+    if wall is None:
+        return "niveau estimé"
+    wt = getattr(wall, "wall_type", "") or ""
+    if "CALL" in wt.upper():
+        kind = "calls"
+    elif "PUT" in wt.upper():
+        kind = "puts"
+    else:
+        kind = "options"
+    oi = f"{wall.total_oi:,.0f} BTC"
+    tag = getattr(wall, "tag", "")
+    tag_str = tag.lower() if tag and hasattr(tag, "lower") else str(tag).lower()
+    suffix = f" ({tag_str})" if tag_str and tag_str not in ("active", "actionable", "") else ""
+    return f"mur {kind}{suffix} ${wall.strike:,.0f} ({oi} OI)"
+
 
 
 @dataclass
@@ -136,6 +181,15 @@ def _build_ladders(spot: float, flip: float | None, mp_strike: float, walls, max
             oi = getattr(w, "total_oi", None) or getattr(w, "oi", None)
             if strike:
                 _add(float(strike), "WALL", oi=float(oi) if oi else None)
+                # F11.3 dissolution flag
+                delta = getattr(w, "oi_delta_24h", 0.0) or 0.0
+                oi_val = float(oi) if oi else 0.0
+                if oi_val > 0 and delta < 0 and abs(delta) / oi_val > 0.20:
+                    entry = candidates.get(float(strike))
+                    if entry:
+                        entry["dissolution"] = True
+                        pct = round(abs(delta) / oi_val * 100, 0)
+                        entry["dissolution_note"] = f"OI -{pct:.0f}% en 24h"
     else:
         # Fallback profil simplifié
         if hasattr(walls, "major_call_wall") and walls.major_call_wall:
@@ -749,7 +803,16 @@ def _compute_niveau_haut(
         if z.zone_type == "RESISTANCE" and z.center > spot * 1.005 and not _is_dormant(z.center, ds)
     ]
 
-    niveau = walls.major_call_wall if walls.major_call_wall > spot * 1.005 else 0.0
+    # F11.1 — sélecteur unifié en premier
+    lvl = select_levels(walls, spot)
+    if lvl["resistance"] is not None:
+        wall = lvl["resistance"]
+        label = _wall_label(wall)
+        if lvl["source"] == "post_expiration":
+            label += " — structure post-expiration"
+        return wall.strike, label
+
+    niveau = walls.major_call_wall if walls.major_call_wall and walls.major_call_wall > spot * 1.005 else 0.0
 
     if magnets_above:
         magnet = min(magnets_above, key=lambda z: abs(z.center - spot))
@@ -757,7 +820,7 @@ def _compute_niveau_haut(
         # Est-ce AUSSI une résistance (dual nature) ?
         is_also_resistance = (
             any(abs(r.center - niveau) / niveau < 0.015 for r in resistance_above) or
-            (walls.major_call_wall > spot and abs(walls.major_call_wall - niveau) / niveau < 0.015)
+            (walls.major_call_wall and walls.major_call_wall > spot and abs(walls.major_call_wall - niveau) / niveau < 0.015)
         )
         if is_also_resistance:
             return niveau, f"${niveau:,.0f} attire le prix, mais peut aussi freiner la cassure"
@@ -770,7 +833,7 @@ def _compute_niveau_haut(
     if niveau > spot * 1.005:
         return niveau, f"${niveau:,.0f} — call wall principal"
 
-    return spot * 1.05, f"${spot * 1.05:,.0f} — zone estimée (pas de wall identifié)"
+    return spot * 1.05, f"${spot * 1.05:,.0f} — estimation spot+5% (pas de wall identifié)"
 
 
 def _compute_niveau_bas(
@@ -814,7 +877,16 @@ def _compute_niveau_bas(
     elif walls.major_put_wall and walls.major_put_wall < spot * 0.998:
         return walls.major_put_wall, f"${walls.major_put_wall:,.0f} — put wall principal"
 
-    return spot * 0.95, f"${spot * 0.95:,.0f} — zone estimée (pas de support identifié)"
+    # F11.1 — fallback select_levels pour support
+    lvl = select_levels(walls, spot)
+    if lvl["support"] is not None:
+        wall = lvl["support"]
+        label = _wall_label(wall)
+        if lvl["source"] == "post_expiration":
+            label += " — structure post-expiration"
+        return wall.strike, label
+
+    return spot * 0.95, f"${spot * 0.95:,.0f} — estimation spot-5% (pas de support identifié)"
 
 
 def _compute_gravity_target(

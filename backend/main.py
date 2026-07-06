@@ -7,6 +7,7 @@ import asyncio
 import json
 import os
 import logging
+import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Optional, List
@@ -687,21 +688,42 @@ async def get_snapshot():
     snap_ts  = snapshot.timestamp
     spot     = snapshot.btc_price
 
-    # ── Calculs partages (1x par snapshot) ────────────────────────────────────
-    gex = compute_gex(snapshot)
-    mopi = compute_mopi(
-        snapshot, gex, iv_history_cache,
-        gex_near_cap=_gex_calibration_cache["cap_value"],
-        cap_mode=_gex_calibration_cache["cap_mode"],
-        saturation_rate_7d=_gex_calibration_cache.get("saturation_rate_7d"),
-    )
-    weather = compute_weather(gex, mopi)
-    dp = compute_dealer_pressure(snapshot)
-    sq = compute_squeeze_score(snapshot, gex, dp, mopi.iv_rank)
-    walls_all = compute_options_walls_horizons(snapshot)
-    walls_near = walls_all.get("near") or compute_options_walls(snapshot)
+    # ── Étape 1 : GEX compute ─────────────────────────────────────────────────
+    gex = None
+    try:
+        gex = compute_gex(snapshot)
+    except Exception as e:
+        log.warning("[snapshot][GEX] error: %s", e)
+        raise HTTPException(500, f"GEX compute error: {e}")
 
-    # ── Gravity map ────────────────────────────────────────────────────────────
+    # ── Étape 2 : MOPI compute ────────────────────────────────────────────────
+    mopi = None; weather = None; dp = None; sq = None
+    try:
+        mopi = compute_mopi(
+            snapshot, gex, iv_history_cache,
+            gex_near_cap=_gex_calibration_cache["cap_value"],
+            cap_mode=_gex_calibration_cache["cap_mode"],
+            saturation_rate_7d=_gex_calibration_cache.get("saturation_rate_7d"),
+        )
+        weather = compute_weather(gex, mopi)
+        dp = compute_dealer_pressure(snapshot)
+        sq = compute_squeeze_score(snapshot, gex, dp, mopi.iv_rank)
+    except Exception as e:
+        log.warning("[snapshot][MOPI] error: %s", e)
+        raise HTTPException(500, f"MOPI compute error: {e}")
+
+    # ── Étape 3 : Walls compute ───────────────────────────────────────────────
+    walls_all = {}; walls_near = None
+    try:
+        walls_all = compute_options_walls_horizons(snapshot)
+        walls_near = walls_all.get("near") or compute_options_walls(snapshot)
+    except Exception as e:
+        log.warning("[snapshot][WALLS] error: %s", e)
+        walls_all = {}; walls_near = None
+
+    # ── Étape 4 : Gravity map compute ────────────────────────────────────────
+    gravity_data = {"error": "not computed", "timestamp": snap_ts}
+    gravity = None
     try:
         from .gravity_map import compute_gravity_map
         gravity = compute_gravity_map(snapshot, gex)
@@ -710,25 +732,39 @@ async def get_snapshot():
             "timestamp": snap_ts,
             "zones": [
                 {
-                    "level": z.level, "strength": round(z.strength, 3),
+                    "level": z.center, "strength": round(z.strength, 3),
                     "type": z.zone_type, "label": z.label, "active": z.active,
                 }
                 for z in (gravity.zones if gravity else [])
             ],
         }
     except Exception as e:
-        log.warning(f"[snapshot] gravity error: {e}")
+        log.warning("[snapshot][GRAVITY] error: %s", e)
         gravity_data = {"error": str(e), "timestamp": snap_ts}
 
-    # ── Narrative ──────────────────────────────────────────────────────────────
+    # ── Étape 5 : Flip activity audit ─────────────────────────────────────────
+    _flip = None
+    try:
+        from .gex_activity_audit import compute_flip_activity_audit
+        _flip = compute_flip_activity_audit(snapshot, gex.flip_level)
+    except Exception as e:
+        log.warning("[snapshot][FLIP_AUDIT] error: %s", e)
+
+    # ── Étape 6 : Gravity activity audit ──────────────────────────────────────
+    _gaudit = None
+    try:
+        from .gravity_activity_audit import compute_gravity_activity_audit
+        _gaudit = compute_gravity_activity_audit(snapshot)
+    except Exception as e:
+        log.warning("[snapshot][GRAVITY_AUDIT] error: %s", e)
+
+    # ── Étape 7 : Narrative compute ───────────────────────────────────────────
+    narrative_data = {"error": "not computed", "timestamp": snap_ts}
     try:
         from .narrative_resolver import resolve_narrative
-        from .gex_activity_audit import compute_gex_activity_audit, compute_flip_activity_audit
-        from .gravity_activity_audit import compute_gravity_activity_audit
+        from .gex_activity_audit import compute_gex_activity_audit
         _audit  = compute_gex_activity_audit(snapshot)
-        _flip   = compute_flip_activity_audit(snapshot, gex.flip_level)  # bugfix: was gex (GEXProfile), must be gex.flip_level (float)
-        _gaudit = compute_gravity_activity_audit(snapshot, gex)
-        gmap_lv = compute_gravity_map(snapshot, gex)
+        gmap_lv = compute_gravity_map(snapshot, gex) if gravity is None else gravity
         dex_lv  = compute_dex_levels(snapshot)
         narrative_out = resolve_narrative(
             mopi=mopi, gex=gex, dp=dp, gmap=gmap_lv,
@@ -739,10 +775,11 @@ async def get_snapshot():
         narrative_data = narrative_out if isinstance(narrative_out, dict) else vars(narrative_out)
         narrative_data["timestamp"] = snap_ts
     except Exception as e:
-        log.warning(f"[snapshot] narrative error: {e}")
+        log.warning("[snapshot][NARRATIVE] error: %s", e)
         narrative_data = {"error": str(e), "timestamp": snap_ts}
 
-    # ── BME status ─────────────────────────────────────────────────────────────
+    # ── Étape 8 : BME status ──────────────────────────────────────────────────
+    bme_data = {"error": "not computed"}
     try:
         from .btc_momentum_engine import get_bme
         bme = get_bme()
@@ -753,7 +790,7 @@ async def get_snapshot():
                 bme_backtests[hz] = bme.backtest(hz, last_n=200)
         bme_data = {"status": bme_status_data, "backtests": bme_backtests}
     except Exception as e:
-        log.warning(f"[snapshot] bme_status error: {e}")
+        log.warning("[snapshot][BME] error: %s", e)
         bme_data = {"error": str(e)}
 
     # ── Dashboard payload ──────────────────────────────────────────────────────
@@ -2465,6 +2502,119 @@ async def get_rapport_dashboard(days: int = Query(7, ge=1, le=90)):
     """Phase 6 — Rapport hebdomadaire à la demande."""
     report = accuracy_tracker.generate_accuracy_report(days=days)
     return {"ok": True, "days": days, "report": report}
+
+
+@app.post("/api/snapshot_golden")
+async def snapshot_golden(label: str = "manual"):
+    """F11.5 — Capture un snapshot complet dans tests/golden/ pour tests post-expiration."""
+    import json
+    import os
+
+    try:
+        snapshot = await deribit.get_cached_snapshot()
+    except Exception as e:
+        raise HTTPException(502, f"Deribit error: {e}")
+
+    snap_ts = snapshot.timestamp
+    spot = snapshot.btc_price
+
+    # Compute key payloads
+    try:
+        from .gex import compute_gex as _cg
+        from .mopi import compute_mopi as _cm
+        from .options_walls import compute_options_walls as _cw
+        from .narrative_resolver import resolve_narrative as _rn
+        from .decision_arbiter import arbitrate as _arb
+        from .gravity_map import compute_gravity_map as _cgm
+        from .dealer_pressure import compute_dealer_pressure as _cdp
+        from .gex_activity_audit import compute_gex_activity_audit, compute_flip_activity_audit
+        from .gravity_activity_audit import compute_gravity_activity_audit
+
+        gex = _cg(snapshot)
+        mopi = _cm(snapshot, gex, iv_history_cache,
+                   gex_near_cap=_gex_calibration_cache["cap_value"],
+                   cap_mode=_gex_calibration_cache["cap_mode"])
+        dp = _cdp(snapshot)
+        walls = _cw(snapshot)
+        gmap = _cgm(snapshot, gex)
+        _audit = compute_gex_activity_audit(snapshot)
+        _flip = compute_flip_activity_audit(snapshot, gex.flip_level)
+        _gaudit = compute_gravity_activity_audit(snapshot)
+        narrative = _rn(mopi=mopi, gex=gex, dp=dp, gmap=gmap,
+                        walls=walls, sq=None, spot=spot,
+                        audit=_audit, flip_audit=_flip, gravity_audit=_gaudit)
+        narrative_dict = narrative if isinstance(narrative, dict) else vars(narrative)
+
+        payload = {
+            "label": label,
+            "ts": snap_ts,
+            "spot": spot,
+            "payload": {
+                "narrative": {k: v for k, v in narrative_dict.items()
+                              if not callable(v)},
+                "walls_count": len(walls.walls) if walls else 0,
+                "flip_level": gex.flip_level,
+                "mopi_score": mopi.score,
+            }
+        }
+    except Exception as e:
+        payload = {"label": label, "ts": snap_ts, "spot": spot, "error": str(e)}
+
+    # Save to tests/golden/
+    golden_dir = os.path.join(os.path.dirname(__file__), "..", "tests", "golden")
+    os.makedirs(golden_dir, exist_ok=True)
+    filename = f"{label}_{snap_ts}.json"
+    filepath = os.path.join(golden_dir, filename)
+    with open(filepath, "w", encoding="utf-8") as f:
+        import json as _json
+        _json.dump(payload, f, ensure_ascii=False, indent=2, default=str)
+
+    return {"status": "saved", "file": filename, "ts": snap_ts, "label": label}
+
+
+@app.get("/api/snapshot_golden")
+def list_snapshot_golden():
+    """F11.5 — Liste les golden files disponibles."""
+    import os, json
+    golden_dir = os.path.join(os.path.dirname(__file__), "..", "tests", "golden")
+    if not os.path.exists(golden_dir):
+        return {"files": []}
+    files = []
+    for fn in sorted(os.listdir(golden_dir)):
+        if fn.endswith(".json"):
+            try:
+                with open(os.path.join(golden_dir, fn), encoding="utf-8") as f:
+                    d = json.load(f)
+                files.append({"file": fn, "label": d.get("label"), "ts": d.get("ts"), "spot": d.get("spot")})
+            except Exception:
+                files.append({"file": fn})
+    return {"files": files}
+
+
+@app.get("/api/health_snapshot")
+def health_snapshot():
+    """Santé des snapshots — âge du dernier snapshot et count sur 24h."""
+    import sqlite3
+    db_path = history_store.DB_PATH
+    try:
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            "SELECT ts FROM metrics_history WHERE ts >= ? ORDER BY ts DESC",
+            (int(time.time()) - 86400,)
+        ).fetchall()
+        conn.close()
+    except Exception as e:
+        return {"error": str(e), "status": "DEGRADED"}
+    n = len(rows)
+    last_ts = rows[0]["ts"] if rows else 0
+    age_s = int(time.time()) - last_ts if last_ts else None
+    return {
+        "last_snapshot_ts": last_ts,
+        "last_snapshot_age_s": age_s,
+        "snapshots_24h": n,
+        "status": "OK" if (age_s is not None and age_s < 300) else "DEGRADED",
+    }
 
 
 @app.get("/api/regime_data_health")

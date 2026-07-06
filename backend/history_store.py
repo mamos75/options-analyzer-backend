@@ -346,3 +346,57 @@ def get_flip_history(hours: int = 6) -> list:
             (cutoff,),
         ).fetchall()
     return [{"ts": r["ts"], "flip_level": r["flip_level"]} for r in rows]
+
+
+def _init_walls_oi_table():
+    """F11.3 — Crée la table walls_oi_history si elle n'existe pas."""
+    with _conn() as c:
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS walls_oi_history (
+                id       INTEGER PRIMARY KEY AUTOINCREMENT,
+                ts       INTEGER NOT NULL,
+                strike   REAL NOT NULL,
+                total_oi REAL NOT NULL
+            )
+        """)
+        c.execute("CREATE INDEX IF NOT EXISTS idx_woi_ts ON walls_oi_history(ts)")
+
+
+def save_walls_oi_snapshot(oi_by_strike: dict):
+    """F11.3 — Sauvegarde OI par strike pour comparaison 24h."""
+    _init_walls_oi_table()
+    ts = int(__import__("time").time())
+    with _conn() as c:
+        for strike, oi in oi_by_strike.items():
+            c.execute(
+                "INSERT INTO walls_oi_history (ts, strike, total_oi) VALUES (?, ?, ?)",
+                (ts, float(strike), float(oi)),
+            )
+        # Purge données >48h
+        c.execute("DELETE FROM walls_oi_history WHERE ts < ?", (ts - 172800,))
+
+
+def get_walls_oi_prev(hours: int = 24) -> dict:
+    """F11.3 — Retourne le snapshot walls_oi le plus proche de il y a `hours` heures.
+
+    Retourne dict {strike: total_oi} ou {} si pas de données.
+    """
+    _init_walls_oi_table()
+    import time
+    now = int(time.time())
+    target_ts = now - hours * 3600
+    with _conn() as c:
+        # Trouver le snapshot le plus proche de target_ts
+        row = c.execute(
+            "SELECT ts FROM walls_oi_history WHERE ts <= ? ORDER BY ts DESC LIMIT 1",
+            (target_ts + 3600,)  # tolérance 1h
+        ).fetchone()
+        if not row:
+            return {}
+        snap_ts = row["ts"]
+        # Récupérer toutes les entrées de ce timestamp (±60s)
+        rows = c.execute(
+            "SELECT strike, total_oi FROM walls_oi_history WHERE ts BETWEEN ? AND ?",
+            (snap_ts - 60, snap_ts + 60)
+        ).fetchall()
+        return {r["strike"]: r["total_oi"] for r in rows}

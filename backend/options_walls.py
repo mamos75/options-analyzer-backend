@@ -12,6 +12,7 @@ import statistics
 
 from .deribit_client import MarketSnapshot
 from .gex import filter_options_by_dte, DTE_NEAR_MAX, DTE_MONTHLY_MIN, DTE_MONTHLY_MAX
+import time as _time
 from .options_activity_engine import (
     compute_flow_ratio,
     compute_proximity_score,
@@ -38,6 +39,7 @@ class OptionsWall:
     volume_24h: float = 0.0           # volume total toutes expiries à ce strike
     dte_nearest_active: int = -1      # DTE de l'expiry la plus active (par contrib. OI×flow)
     tag: ActivityTag = TAG_DORMANT    # DORMANT | STRUCTURAL | ACTIVE | ACTIONABLE
+    oi_delta_24h: float = 0.0         # variation OI en BTC sur 24h (négatif = dissolution)
 
 
 @dataclass
@@ -153,6 +155,20 @@ def compute_options_walls(snapshot: MarketSnapshot) -> OptionsWallsProfile:
 
     walls.sort(key=lambda w: w.total_oi, reverse=True)
 
+    # F11.3 — OI delta 24h : comparer avec snapshot précédent
+    try:
+        from . import history_store as _hs
+        _prev_oi = _hs.get_walls_oi_prev()
+        if _prev_oi:
+            for w in walls:
+                prev = _prev_oi.get(w.strike)
+                if prev is not None and prev > 0:
+                    w.oi_delta_24h = round(w.total_oi - prev, 2)
+        # Sauvegarder le snapshot courant
+        _hs.save_walls_oi_snapshot({w.strike: w.total_oi for w in walls})
+    except Exception:
+        pass
+
     # Call wall = strike au-dessus spot avec le + de call OI
     above_calls = {s: v for s, v in call_oi.items() if s > spot}
     major_call_wall = max(above_calls, key=above_calls.get) if above_calls else None
@@ -160,7 +176,7 @@ def compute_options_walls(snapshot: MarketSnapshot) -> OptionsWallsProfile:
     major_put_wall = max(below_puts, key=below_puts.get) if below_puts else None
 
     return OptionsWallsProfile(
-        walls=walls[:10],
+        walls=walls[:20],
         major_call_wall=major_call_wall,
         major_put_wall=major_put_wall,
         oi_by_strike=oi_by_strike,

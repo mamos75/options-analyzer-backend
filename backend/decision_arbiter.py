@@ -24,6 +24,11 @@ V5 — Fusion VEX/CEX Regime :
 
 from __future__ import annotations
 
+# ── MOPI seuils centralisés ───────────────────────────────────────────────────
+MOPI_SIGNAL_HIGH = 70   # score > MOPI_SIGNAL_HIGH → signal UP
+MOPI_SIGNAL_LOW  = 30   # score < MOPI_SIGNAL_LOW  → signal DOWN
+# Note : backtest.py utilise 65/35 — logique séparée, ne pas modifier ici.
+
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Optional
@@ -334,8 +339,8 @@ def compute_decision(
         })
 
     # MOPI
-    if mopi_n_outcomes >= 30 and (mopi_score > 70 or mopi_score < 30):
-        direction = "UP" if mopi_score > 70 else "DOWN"
+    if mopi_n_outcomes >= 30 and (mopi_score > MOPI_SIGNAL_HIGH or mopi_score < MOPI_SIGNAL_LOW):
+        direction = "UP" if mopi_score > MOPI_SIGNAL_HIGH else "DOWN"
         signals_used.append({
             "name": "MOPI",
             "direction": direction,
@@ -347,7 +352,7 @@ def compute_decision(
         if mopi_n_outcomes < 30:
             reason = f"MOPI {mopi_score:.0f}/100 — historique insuffisant ({mopi_n_outcomes} outcomes < 30 requis)"
         else:
-            reason = f"MOPI {mopi_score:.0f}/100 — dans la zone neutre (signal extrême requis : ≥80 ou ≤20)"
+            reason = f"MOPI {mopi_score:.0f}/100 — dans la zone neutre (signal extrême requis : >{MOPI_SIGNAL_HIGH} ou <{MOPI_SIGNAL_LOW})"
         signals_ignored.append({"name": "MOPI", "reason": reason})
 
     # Flip
@@ -430,7 +435,8 @@ def compute_decision(
         confidence_pct = 0
     elif forced_verdict:
         verdict = forced_verdict
-        phrase = f"Régime VEX/CEX {vexcex_regime_id} ({vexcex_label}) — {forced_verdict} imposé."
+        _display_verdict = "OBSERVER" if forced_verdict == "OBSERVE" else forced_verdict
+        phrase = f"Régime VEX/CEX {vexcex_regime_id} ({vexcex_label}) — {_display_verdict} imposé."
         confidence_pct = 30
     elif n_signals == 0:
         verdict = "NO_TRADE"
