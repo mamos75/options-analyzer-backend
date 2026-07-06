@@ -260,7 +260,7 @@ async def _history_saver():
                     spot_volume_7d_avg=bf_h.get("spot_volume_7d_avg"),
                     spot_prev=None,
                     # V2 — Crash Regime Gate
-                    gex_regime=gex.regime,
+                    gex_regime=gex.regime_meca,
                     dex_score=(dp.pressure_pct + 100.0) / 2.0,
                 )
                 history_store.save_pe_snapshot(
@@ -292,7 +292,7 @@ async def _history_saver():
                         "pc_ratio_near": mopi.pc_ratio_near,
                         "mopi_score": mopi.score,
                         "flip_level": gex.flip_level,
-                        "gex_regime": gex.regime,
+                        "gex_regime": gex.regime_meca,
                         "max_pain_strike": max_pain_strike_h,
                         "max_pain_dte": max_pain_dte_h,
                         "put_wall": walls_h.major_put_wall or 0.0,
@@ -378,7 +378,8 @@ async def _executive_logger():
             elif score >= 50: bull += 1
             elif score <= 45: bear += 2
             else: bear += 1
-            if gex.regime == "AMPLIFICATEUR":
+            # ZONE_DE_FLIP traité comme AMPLIFICATEUR (prudence : amplification bi-directionnelle)
+            if gex.regime_meca in ("AMPLIFICATEUR", "ZONE_DE_FLIP"):
                 if score >= 50: bull += 1
                 else: bear += 1
             if dp.direction == "BULLISH_FLOWS": bull += 1
@@ -391,10 +392,11 @@ async def _executive_logger():
             # ── Contexte régime pour apprentissage conditionnel ──────────────
             _iv_rank_val = mopi.iv_rank or 50.0
             _gex_regime_mapped = {
-                "AMPLIFICATEUR": "Negative_Gamma",
-                "STABILISANT":   "Positive_Gamma",
-                "NEUTRE":        "Neutral",
-            }.get(gex.regime, gex.regime)
+                "AMPLIFICATEUR":  "Negative_Gamma",
+                "ZONE_DE_FLIP":   "Negative_Gamma",  # zone de bascule → amplification bi-directionnelle
+                "STABILISANT":    "Positive_Gamma",
+                "NEUTRE":         "Neutral",
+            }.get(gex.regime_meca, gex.regime_meca)
             _vol_regime = (
                 "Vol_Expansion" if _iv_rank_val > 60
                 else "Vol_Contraction" if _iv_rank_val < 40
@@ -760,7 +762,8 @@ async def get_snapshot():
     dashboard_data = {
         "btc_price":             spot,
         "gex_total":             gex.total_gex,
-        "gex_regime":            gex.regime,
+        "gex_regime":            gex.regime_meca,   # source unique — gex.regime est alias déprécié
+        "gex_flip_incoherent":   gex.gex_flip_incoherent,
         "flip_level":            gex.flip_level,
         "mopi_score":            mopi.score,
         "mopi_label":            mopi.label,
@@ -840,7 +843,7 @@ async def get_dashboard():
     return DashboardResponse(
         btc_price=snapshot.btc_price,
         gex_total=gex.total_gex,
-        gex_regime=gex.regime,
+        gex_regime=gex.regime_meca,  # source unique — gex.regime est alias déprécié
         flip_level=gex.flip_level,
         flip_level_reason=gex.flip_level_reason,
         flip_available=gex.flip_available,
@@ -952,7 +955,7 @@ async def get_flip_audit():
     return {
         "btc_price": spot,
         "gex_total": gex.total_gex,
-        "regime": gex.regime,
+        "regime": gex.regime_meca,
         "flip_actif": round(gex.flip_level, 0) if gex.flip_level is not None else None,
         "variants": result,
         "avant_apres_5_snapshots": scenarios,
@@ -1381,7 +1384,7 @@ async def get_decision():
         "data_stale": deribit.data_stale,
         "range_mode": narrative.range_mode,
         "asymmetric_side": narrative.asymmetric_side,
-        "gex_regime": gex.regime,
+        "gex_regime": gex.regime_meca,
         "dex_direction": dp.direction,
     }
 
@@ -1701,7 +1704,7 @@ async def get_probability_engine():
         spot_volume_7d_avg=bf.get("spot_volume_7d_avg"),
         spot_prev=None,  # non disponible en temps réel — utilisé uniquement en historique
         # V2 — Crash Regime Gate
-        gex_regime=gex.regime,
+        gex_regime=gex.regime_meca,  # source unique
         dex_score=(dp.pressure_pct + 100.0) / 2.0,
         # V2 — Module Reliability (point 5)
         module_accuracy_scores=_module_accuracy if _module_accuracy else None,
@@ -2178,13 +2181,14 @@ async def get_executive_summary():
 
     _intensity_fr = {"EXTREME": "forte", "HIGH": "élevée", "MODERATE": "modérée", "LOW": "faible"}
     _gex_reason = {
-        "STABILISANT": "Les market makers freinent les mouvements brusques",
+        "STABILISANT":  "Les market makers freinent les mouvements brusques",
         "AMPLIFICATEUR": "Les market makers amplifient les mouvements haussiers ou baissiers",
-        "NEUTRE": "Les market makers n'ont pas d'effet directionnel en ce moment",
+        "ZONE_DE_FLIP": "Le prix est sur la ligne de bascule — régime indéterminé, amplification possible",
+        "NEUTRE":       "Les market makers n'ont pas d'effet directionnel en ce moment",
     }
     reasons = [
         f"Options : {mopi.label.lower()} ({score:.0f}/100)",
-        _gex_reason.get(gex.regime, f"Régime {gex.regime.lower()}"),
+        _gex_reason.get(gex.regime_meca, f"Régime {gex.regime_meca.lower()}"),
         f"BTC est attiré vers ${gmap.strongest_magnet:,.0f} à l'expiration" if gmap.strongest_magnet > 0 else "Pas d'aimant principal identifié",
     ]
 
@@ -2195,7 +2199,7 @@ async def get_executive_summary():
         (dp.direction == "BULLISH_FLOWS" and bias_color == "red")
     )
     _gex_contradicts_mopi = (
-        gex.regime == "AMPLIFICATEUR" and 45 <= score <= 55
+        gex.regime_meca in ("AMPLIFICATEUR", "ZONE_DE_FLIP") and 45 <= score <= 55  # ZONE_DE_FLIP = amplification bi-directionnelle
     )
     signals_conflict = _dex_contradicts_mopi or _gex_contradicts_mopi
 
@@ -2211,7 +2215,7 @@ async def get_executive_summary():
         side = "sous" if zone_exp < spot else "au-dessus"
         risks.append(f"Si BTC atteint ${zone_exp:,.0f} ({side}), le mouvement peut s'emballer")
     # Risque régime AMPLIFICATEUR sans consensus directionnel clair
-    if gex.regime == "AMPLIFICATEUR" and 40 <= score <= 60:
+    if gex.regime_meca in ("AMPLIFICATEUR", "ZONE_DE_FLIP") and 40 <= score <= 60:  # ZONE_DE_FLIP : risque amplifié bi-directionnel
         risks.append("Régime AMPLIFICATEUR sans direction confirmée — les deux sens peuvent s'emballer")
     if not risks:
         risks.append("Pas de risque mécanique options critique identifié")
@@ -2225,7 +2229,8 @@ async def get_executive_summary():
     else: bear += 1
     # AMPLIFICATEUR amplifie la direction → +1 dans le sens du biais
     # STABILISANT comprime → signal neutre, pas d'apport directionnel
-    if gex.regime == "AMPLIFICATEUR":
+    # ZONE_DE_FLIP traité comme AMPLIFICATEUR (prudence : amplifie dans les deux sens)
+    if gex.regime_meca in ("AMPLIFICATEUR", "ZONE_DE_FLIP"):
         if score >= 50: bull += 1
         else: bear += 1
     if dp.direction == "BULLISH_FLOWS": bull += 1
@@ -2268,7 +2273,7 @@ async def get_executive_summary():
             iv_rank=mopi.iv_rank, pc_ratio_near=mopi.pc_ratio_near,
             put_wall=_pe_walls.major_put_wall or 0.0, call_wall=_pe_walls.major_call_wall or 0.0,
             max_pain_strike=_mp_strike_ex, max_pain_dte=_mp_dte_ex,
-            mopi_score=mopi.score, gex_regime=gex.regime,
+            mopi_score=mopi.score, gex_regime=gex.regime_meca,  # source unique
             dex_score=(dp.pressure_pct + 100.0) / 2.0,
             module_accuracy_scores=_module_acc_ex if _module_acc_ex else None,
         )
@@ -2294,10 +2299,11 @@ async def get_executive_summary():
     def _build_lecture_principale() -> str:
         """1 phrase — ce qui se passe vraiment."""
         regime_txt = {
-            "STABILISANT": "Compression mécanique",
+            "STABILISANT":  "Compression mécanique",
             "AMPLIFICATEUR": "Régime amplificateur",
-            "NEUTRE": "Régime neutre",
-        }.get(gex.regime, gex.regime)
+            "ZONE_DE_FLIP": "Zone de bascule",
+            "NEUTRE":       "Régime neutre",
+        }.get(gex.regime_meca, gex.regime_meca)
         if score >= 65:
             sens = "haussière"
         elif score <= 35:

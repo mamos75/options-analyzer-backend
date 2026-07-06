@@ -171,8 +171,9 @@ def compute_vex_cex(snapshot: MarketSnapshot) -> VexCexProfile:
         flip_dist = round((flip - spot) / spot * 100, 2)
         flip_side = "above" if flip > spot else "below"
 
-    regime_map = {"STABILISANT": "STABILISATEUR", "AMPLIFICATEUR": "AMPLIFICATEUR", "NEUTRE": "NEUTRE"}
-    flip_regime = regime_map.get(gex_prof.regime, gex_prof.regime)
+    # regime_meca est la source canonique (STABILISANT | AMPLIFICATEUR | ZONE_DE_FLIP | NEUTRE)
+    # Suppression du regime_map local — le renommage STABILISANT→STABILISATEUR était cosmétique erroné
+    flip_regime = gex_prof.regime_meca
 
     flip_interp = (
         f"GEX {flip_regime} : Gamma Flip {'au-dessus' if flip_side == 'above' else 'en-dessous'} du spot."
