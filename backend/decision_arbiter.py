@@ -443,12 +443,14 @@ def compute_decision(
     elif up_signals and not down_signals and not has_contradiction:
         verdict = "SIGNAL_UP"
         names = " + ".join(s["name"] for s in up_signals)
-        phrase = f"Signal haussier convergent ({names}). Entrée si confirmation volume."
+        # F9.5 — trigger réel : cassure du premier niveau de l'échelle
+        phrase = f"Signal haussier convergent ({names}). Attendre cassure confirmée du premier niveau upside."
         confidence_pct = min(70, 40 + len(up_signals) * 15)
     elif down_signals and not up_signals and not has_contradiction:
         verdict = "SIGNAL_DOWN"
         names = " + ".join(s["name"] for s in down_signals)
-        phrase = f"Signal baissier convergent ({names}). Entrée si confirmation volume."
+        # F9.5 — trigger réel
+        phrase = f"Signal baissier convergent ({names}). Attendre cassure confirmée du premier niveau downside."
         confidence_pct = min(70, 40 + len(down_signals) * 15)
     elif has_contradiction:
         verdict = "OBSERVE"
@@ -509,9 +511,16 @@ def compute_decision(
     else:
         state = "TENSION"
 
+    # F9.5 — AGIR_* exige ≥2 sources directionnelles convergentes ; 1 source = PRÉPARER + raison
     if verdict in ("SIGNAL_UP", "SIGNAL_DOWN"):
-        if confidence_pct >= 60:
+        _dir_signals = up_signals if verdict == "SIGNAL_UP" else down_signals
+        _n_dir = len(_dir_signals)
+        if confidence_pct >= 60 and _n_dir >= 2:
             action = "AGIR_LONG" if verdict == "SIGNAL_UP" else "AGIR_SHORT"
+        elif _n_dir == 1:
+            action = "PRÉPARER"
+            _solo_name = _dir_signals[0]["name"]
+            phrase = phrase + f" ({_solo_name} seul — attendre 2e confirmation)"
         else:
             action = "PRÉPARER"
     else:
