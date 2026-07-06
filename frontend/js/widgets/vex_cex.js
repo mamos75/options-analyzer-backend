@@ -3,7 +3,6 @@ import { apiFetch } from '../api.js';
 import { esc } from '../lib/fmt.js';
 import { drawVcLine } from '../lib/canvas.js';
 import { lastRegime, vcPeriod, setVcPeriodState } from '../store.js';
-import { classifyRegime } from './regime.js';
 
 export async function loadVexCex(signal) {
   const data = await apiFetch('/api/vex_cex', signal);
@@ -37,16 +36,9 @@ export async function loadVexCex(signal) {
     `<span class="vex-cex-chip" title="CEX: ${_fmtCex(s.cex)}">$${Math.round(s.strike).toLocaleString()}</span>`
   ).join('');
 
-  // Get GEX/DEX from the already-loaded mopi data if available, else from context
-  // We use stored values from MODULE 8/9 or fallback to 0 for regime (we classify from vex/cex primarily)
-  // For a better regime we'll use gex from the context module which is already in the DOM
-  const gexEl = document.getElementById('ctx-gex-val');
-  const dexEl = document.getElementById('ctx-dex-val');
-  const gexRaw = gexEl ? parseFloat(gexEl.dataset.raw || '0') : 0;
-  const dexRaw = dexEl ? parseFloat(dexEl.dataset.raw || '0') : 0;
-
-  // Reuse regime computed by loadRegimeSummary() if available (avoids double fetch)
-  const regime = lastRegime || classifyRegime(data.vex_total, data.cex_total, gexRaw, dexRaw, data.gamma_flip_dist_pct);
+  // V3: reuse regime computed by loadRegimeSummary() — store is always populated first
+  // no fallback to avoid race divergence
+  const regime = lastRegime;
 
   const signalRows = [
     { name: 'VEX', val: esc(data.vex_total_fmt), bull: data.vex_total >= 0 },
@@ -114,6 +106,7 @@ export async function loadVexCex(signal) {
       </div>
     </div>
 
+    ${regime ? `
     <div class="regime-block">
       <div class="regime-header">
         <div class="regime-title">Diagnostic de régime</div>
@@ -125,11 +118,7 @@ export async function loadVexCex(signal) {
       <div class="regime-plain">${regime.plain}</div>
       <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:8px;">Signaux composites</div>
       <div class="regime-signals">${signalRows}</div>
-      ${regime.advice ? `<div style="margin-top:12px;padding:10px 14px;background:rgba(255,255,255,0.03);border-radius:10px;border-left:3px solid ${regime.color}40">
-        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:${regime.color};margin-bottom:5px;">Implication pratique</div>
-        <div style="font-size:12px;color:#b0bec5;line-height:1.6;">${regime.advice}</div>
-      </div>` : ''}
-    </div>
+    </div>` : ''}
   `;
 }
 export function setVcPeriod(p, btn) {

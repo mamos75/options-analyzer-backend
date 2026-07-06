@@ -80,6 +80,11 @@ class GEXProfile:
     gex_near: float = 0.0     # DTE ≤ 14 — trading / alertes / narrative / squeeze
     gex_monthly: float = 0.0  # DTE 15-45 — swing context
     gex_global: float = 0.0   # DTE > 45 — structure uniquement
+    # V3-bis — regime mecanique spot/flip (source unique)
+    regime_meca: str = "NEUTRE"           # STABILISANT | AMPLIFICATEUR | ZONE_DE_FLIP | NEUTRE
+    regime_source: str = "gex_estime"    # "flip" | "gex_estime"
+    gex_intensity: float = 0.0           # |gex_total| — magnitude separee du regime
+    gex_flip_incoherent: bool = False    # True si signe GEX contredit le regime mecanique
 
 
 def compute_effective_gamma_horizons(snapshot: MarketSnapshot) -> GEXHorizons:
@@ -160,6 +165,8 @@ def compute_gex(snapshot: MarketSnapshot) -> GEXProfile:
     gamma_walls = _find_gamma_walls(gex_by_strike)
     regime = _classify_regime(total_gex)
     horizons = compute_effective_gamma_horizons(snapshot)
+    # V3-bis — regime mecanique (source unique)
+    meca = classify_regime_spot_flip(spot, flip_level, total_gex)
 
     return GEXProfile(
         total_gex=total_gex,
@@ -179,6 +186,10 @@ def compute_gex(snapshot: MarketSnapshot) -> GEXProfile:
         gex_near=horizons.near,
         gex_monthly=horizons.monthly,
         gex_global=horizons.global_,
+        regime_meca=meca["regime_meca"],
+        regime_source=meca["regime_source"],
+        gex_intensity=meca["gex_intensity"],
+        gex_flip_incoherent=meca["gex_flip_incoherent"],
     )
 
 
@@ -594,14 +605,76 @@ def _find_gamma_walls(gex_by_strike: Dict[float, float]) -> List[float]:
 
 
 GEX_NEUTRAL_THRESHOLD = 5_000_000  # $5M — zone morte, aucune alerte en dessous
+_FLIP_ZONE_PCT = 0.01  # ±1% du spot = zone de flip
 
 
 def _classify_regime(total_gex: float) -> str:
+    """Regime GEX base sur la magnitude totale — conserve la compatibilite backward."""
     if total_gex > GEX_NEUTRAL_THRESHOLD:
         return "STABILISANT"
     elif total_gex < -GEX_NEUTRAL_THRESHOLD:
         return "AMPLIFICATEUR"
     return "NEUTRE"
+
+
+def classify_regime_spot_flip(
+    spot: float,
+    flip: Optional[float],
+    total_gex: float,
+) -> dict:
+    """V3-bis — Regime mecanique unique base sur la position spot/flip.
+
+    STABILISANT   : spot > flip (spot au-dessus du Gamma Flip)
+    AMPLIFICATEUR : spot < flip (spot en-dessous du Gamma Flip)
+    ZONE_DE_FLIP  : |spot - flip| / spot < FLIP_ZONE_PCT (±1%)
+    NEUTRE        : flip non detecte — fallback signe GEX total
+
+    Retourne :
+      regime_meca    : str  — STABILISANT | AMPLIFICATEUR | ZONE_DE_FLIP | NEUTRE
+      regime_source  : str  — "flip" | "gex_estime"
+      gex_intensity  : float — |gex_total| (magnitude, separee du regime)
+      gex_flip_incoherent : bool — si le signe GEX contredit le regime mecanique
+    """
+    gex_intensity = abs(total_gex)
+
+    if flip is None or spot <= 0:
+        # Fallback : signe GEX total
+        if total_gex > GEX_NEUTRAL_THRESHOLD:
+            regime_meca = "STABILISANT"
+        elif total_gex < -GEX_NEUTRAL_THRESHOLD:
+            regime_meca = "AMPLIFICATEUR"
+        else:
+            regime_meca = "NEUTRE"
+        return {
+            "regime_meca": regime_meca,
+            "regime_source": "gex_estime",
+            "gex_intensity": gex_intensity,
+            "gex_flip_incoherent": False,
+        }
+
+    dist_pct = abs(spot - flip) / spot
+    if dist_pct < _FLIP_ZONE_PCT:
+        regime_meca = "ZONE_DE_FLIP"
+    elif spot > flip:
+        regime_meca = "STABILISANT"
+    else:
+        regime_meca = "AMPLIFICATEUR"
+
+    # Check de coherence : signe GEX doit confirmer le regime mecanique
+    # STABILISANT -> GEX devrait etre positif
+    # AMPLIFICATEUR -> GEX devrait etre negatif
+    incoherent = False
+    if regime_meca == "STABILISANT" and total_gex < -GEX_NEUTRAL_THRESHOLD:
+        incoherent = True
+    elif regime_meca == "AMPLIFICATEUR" and total_gex > GEX_NEUTRAL_THRESHOLD:
+        incoherent = True
+
+    return {
+        "regime_meca": regime_meca,
+        "regime_source": "flip",
+        "gex_intensity": gex_intensity,
+        "gex_flip_incoherent": incoherent,
+    }
 
 
 def gex_summary(profile: GEXProfile) -> str:

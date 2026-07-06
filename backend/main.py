@@ -625,6 +625,11 @@ class DashboardResponse(BaseModel):
     pc_ratio_weighted: float = 0.0       # toutes expiries, 1/sqrt(DTE) — MOPI V2
     pc_ratio_institutional: float = 0.0  # backward compat — expiry OI max
     dominant_expiry: Optional[dict] = None  # expiry dominant dans pcr_weighted
+    # V3-bis — regime mecanique spot/flip (source unique pour le frontend)
+    regime_meca: str = "NEUTRE"              # STABILISANT | AMPLIFICATEUR | ZONE_DE_FLIP | NEUTRE
+    regime_source: str = "gex_estime"        # "flip" | "gex_estime"
+    gex_intensity: float = 0.0               # |gex_total| — magnitude separee du regime
+    gex_flip_incoherent: bool = False        # True si signe GEX contredit le regime mecanique
 
 
 def _mp_dict(mp: MaxPainExpiry) -> dict:
@@ -851,6 +856,10 @@ async def get_dashboard():
         pc_ratio_weighted=mopi.pc_ratio_weighted,
         pc_ratio_institutional=mopi.pc_ratio_institutional,
         dominant_expiry=mopi.dominant_expiry or None,
+        regime_meca=gex.regime_meca,
+        regime_source=gex.regime_source,
+        gex_intensity=gex.gex_intensity,
+        gex_flip_incoherent=gex.gex_flip_incoherent,
     )
 
 

@@ -4,10 +4,13 @@ import { esc } from '../lib/fmt.js';
 import { CFG } from '../config.js';
 import { setLastRegime } from '../store.js';
 
-export function classifyRegimeFull({ vex, cex, gex, dex, vexTrend, cexTrend, gexTrend, dexTrend, flipDistPct, flipLevel }) { /* FLIP_PRICE_v1 */
-  // Signs
-  const vexBull = vex > 0;   // VEX+ = dealers buy BTC on IV up
-  const cexBull = cex > 0;   // CEX+ = dealers buy BTC as time passes
+export function classifyRegimeFull({ vex, cex, gex, dex, vexTrend, cexTrend, gexTrend, dexTrend, flipDistPct, flipLevel, vexDirection, cexDirection }) { /* FLIP_PRICE_v1 */
+  // V3: signes tri-état depuis les champs backend (zone morte calculée côté serveur)
+  // vexDirection / cexDirection : 'BULLISH_VANNA' | 'NEUTRAL' | 'BEARISH_VANNA' | 'BULLISH_CHARM' | 'BEARISH_CHARM'
+  const vexNeutral = !vexDirection || vexDirection === 'NEUTRAL';
+  const cexNeutral = !cexDirection || cexDirection === 'NEUTRAL';
+  const vexBull = vexDirection ? vexDirection.startsWith('BULLISH') : vex > 0;
+  const cexBull = cexDirection ? cexDirection.startsWith('BULLISH') : cex > 0;
   const gexBull = gex >= 0;  // GEX+ = stabilisateur
   const dexBull = dex <= 0;  // DEX- = dealers buy BTC on dip = support
 
@@ -44,14 +47,16 @@ export function classifyRegimeFull({ vex, cex, gex, dex, vexTrend, cexTrend, gex
   const flipDir  = flipDistPct !== null && flipDistPct < 0 ? 'EN-DESSOUS du spot' : 'AU-DESSUS du spot';
   const bullCount = [vexBull, cexBull, gexBull, dexBull].filter(Boolean).length;
 
-  const fmtM   = v => (v >= 0 ? '+' : '') + (v / 1e6).toFixed(1) + 'M';
+  // V2: formateurs d'unités corrects — VEX en $, CEX en Δ BTC/jour (ne pas diviser par 1e6)
+  const fmtVex = v => { const a=Math.abs(v),s=v>=0?'+':'-'; return a>=1e9?s+(a/1e9).toFixed(2)+'B':a>=1e6?s+(a/1e6).toFixed(1)+'M':s+Math.round(a).toLocaleString(); };
+  const fmtCex = v => { const a=Math.abs(v),s=v>=0?'+':'-'; return a>=1000?s+(a/1000).toFixed(1)+'K Δ/j':s+a.toFixed(1)+' Δ/j'; };
   const fmtB   = v => (v >= 0 ? '+' : '') + (v / 1e9).toFixed(2) + 'B';
   const fmtDex = v => (v >= 0 ? '+' : '') + Math.round(v).toLocaleString();
   const arr    = t => t === 'up' ? '↑' : t === 'down' ? '↓' : '→';
 
   const signals = [
-    { name:'VEX',        formatted:fmtM(vex),    bull:vexBull, trendUp:vexUp,  trendFlat:vexTrend==='flat' },
-    { name:'CEX',        formatted:fmtM(cex),    bull:cexBull, trendUp:cexUp,  trendFlat:cexTrend==='flat' },
+    { name:'VEX',        formatted:fmtVex(vex),  bull:vexBull, trendUp:vexUp,  trendFlat:vexTrend==='flat' },
+    { name:'CEX',        formatted:fmtCex(cex),  bull:cexBull, trendUp:cexUp,  trendFlat:cexTrend==='flat' },
     { name:'GEX',        formatted:fmtB(gex),    bull:gexBull, trendUp:gexUp,  trendFlat:gexTrend==='flat' },
     { name:'DEX',        formatted:fmtDex(dex),  bull:dexBull, trendUp:dexUp,  trendFlat:dexTrend==='flat' },
     { name:'Gamma Flip',
@@ -63,9 +68,11 @@ export function classifyRegimeFull({ vex, cex, gex, dex, vexTrend, cexTrend, gex
       bull:gexBull, trendUp:null, trendFlat:true },
   ];
 
+  // V3: si vex ou cex est NEUTRAL → toute urgence CRITIQUE est interdite
+  const _urgency = (u) => (u === 'CRITIQUE' && (vexNeutral || cexNeutral)) ? 'MODÉRÉE' : u;
   const mk = (id, label, phase, color, confidence, urgency, bias, plain, raison, pro) => ({
-    id, label, phase, color, dot:color, confidence, urgency, bias,
-    signals, plain, raison, pro, advice: raison + ' ' + pro,
+    id, label, phase, color, dot:color, confidence, urgency: _urgency(urgency), bias,
+    signals, plain, raison, pro,
   });
 
   // ══════════════════════════════════════════════════════════════════
@@ -251,15 +258,31 @@ export function classifyRegimeFull({ vex, cex, gex, dex, vexTrend, cexTrend, gex
   // ══════════════════════════════════════════════════════════════════
   // GROUPE 4 — COMPRESSION VEX≠CEX                     [COMP-0..6]
   // ══════════════════════════════════════════════════════════════════
+  // V3 : si VEX ou CEX est NEUTRAL → jamais de compression, signaux faibles
+  if (vexNeutral || cexNeutral) return mk(
+    ‘NEU-0’,’SIGNAUX FAIBLES — RAS’,’neutral’,’#64748b’,
+    ‘FAIBLE’,’NORMALE’,’PATIENCE’,
+    `VEX ou CEX dans la zone neutre : la vanna/charm n’exerce pas de pression directionnelle significative.`,
+    `Raison : au moins un signal dans la zone morte backend.`,
+    `Attendre un signal clair avant de prendre position.`
+  );
+
   if (vexBull !== cexBull) {
 
-    // COMP-0 : flip proche = pré-explosif
-    if (nearFlip5) return mk(
-      'COMP-0','COMPRESSION PRÉ-EXPLOSIVE','compression','#a855f7',
-      'ÉLEVÉE','CRITIQUE','STRANGLE',
+    // COMP-0 : flip proche = pré-explosif — gate magnitude requis (V3)
+    if (nearFlip5 && (bigVex || bigCex)) return mk(
+      ‘COMP-0’,’COMPRESSION PRÉ-EXPLOSIVE’,’compression’,’#a855f7’,
+      ‘ÉLEVÉE’,’CRITIQUE’,’STRANGLE’,
       `VEX et CEX s’opposent ET Gamma Flip ${fmtFlip} (zone < 5%). Double tension : forces contradictoires + proximité du flip. Breakout violent imminent dans un sens ou l’autre.`,
-      `Raison : compression interne + flip proche = énergie accumulée sans direction.`,
+      `Raison : compression interne + flip proche + magnitude significative = énergie accumulée.`,
       `Un trader pro achète un strangle ou straddle. Le Gamma Flip est le déclencheur à surveiller.`
+    );
+    if (nearFlip5) return mk(
+      ‘COMP-6’,’COMPRESSION FAIBLE — FLIP PROCHE’,’compression’,’#c084fc’,
+      ‘FAIBLE’,’NORMALE’,’PATIENCE’,
+      `VEX et CEX s’opposent près du Gamma Flip ${fmtFlip}, mais les magnitudes sont insuffisantes pour un breakout violent.`,
+      `Raison : compression sans magnitude — signal de vigilance, pas d’alerte.`,
+      `Surveiller le flip mais pas de position optionnelle agressive.`
     );
 
     // COMP-5 : compression EN FORMATION (trends divergents)
@@ -777,11 +800,14 @@ export async function loadRegimeSummary(signal) {
   const el = document.getElementById('regime-summary-content');
   const dot = document.getElementById('regime-dot-indicator');
   try {
-    const [vcData, mopiData, vcHistory, narrData] = await Promise.all([
+    // V3: GEX/DEX live depuis dashboard + dealer_pressure (pas le dernier point d'historique 1h)
+    const [vcData, mopiData, vcHistory, narrData, dashData, dealerData] = await Promise.all([
       apiFetch('/api/vex_cex', signal),
       apiFetch('/api/mopi_vs_btc?period=7d', signal),
       apiFetch('/api/vex_cex_history?period=7d', signal),
-      apiFetch('/api/narrative', signal),   // for niveau_haut / niveau_bas / btc_price
+      apiFetch('/api/narrative', signal),
+      apiFetch('/api/dashboard', signal),
+      apiFetch('/api/dealer_pressure', signal),
     ]);
 
     if (!vcData || vcData.error) throw new Error('vex_cex indisponible');
@@ -793,41 +819,42 @@ export async function loadRegimeSummary(signal) {
       const recent = arr.slice(n - 5).reduce((a, b) => a + b, 0) / 5;
       const prev   = arr.slice(n - 10, n - 5).reduce((a, b) => a + b, 0) / 5;
       const delta  = recent - prev;
-      const t = Math.abs(prev) * 0.01 + thresh;
-      return delta > t ? 'up' : delta < -t ? 'down' : 'flat';
+      // V3: seuil absolu uniquement (pas hybride prev×0.01 + thresh qui est imprévisible)
+      return delta > thresh ? 'up' : delta < -thresh ? 'down' : 'flat';
     }
 
-    // ── GEX / DEX trends from mopi_vs_btc ──────────────────────────
+    // ── GEX / DEX LIVE (V3) + trends depuis historique ─────────────
+    const gexLive = dashData?.gex_total ?? 0;
+    const dexLive = dealerData?.net_delta_usd ?? dealerData?.dex_total ?? 0;
+
     let gexTrend = 'flat', dexTrend = 'flat';
-    let gexLast = 0, dexLast = 0;
     if (mopiData && mopiData.gex && mopiData.gex.length >= 10) {
       gexTrend = calcTrend(mopiData.gex, CFG.GEX_TREND_GEX_THRESH);
       dexTrend = calcTrend(mopiData.dex, 100);
-      gexLast  = mopiData.gex[mopiData.gex.length - 1];
-      dexLast  = mopiData.dex[mopiData.dex.length - 1];
     }
 
-    // ── VEX / CEX trends from vex_cex_history ──────────────────────
+    // ── VEX / CEX trends depuis historique v2 ──────────────────────
     let vexTrend = 'flat', cexTrend = 'flat';
     if (vcHistory && vcHistory.points && vcHistory.points.length >= 10) {
       const pts = vcHistory.points;
-      const vexArr = pts.map(p => p.vex);
-      const cexArr = pts.map(p => p.cex);
-      vexTrend = calcTrend(vexArr, CFG.GEX_TREND_VEX_THRESH);   // threshold: 1M
-      cexTrend = calcTrend(cexArr, CFG.GEX_TREND_CEX_THRESH);   // threshold: 0.5M
+      vexTrend = calcTrend(pts.map(p => p.vex), CFG.GEX_TREND_VEX_THRESH);
+      cexTrend = calcTrend(pts.map(p => p.cex), CFG.GEX_TREND_CEX_THRESH);
     }
 
     const regime = classifyRegimeFull({
       vex: vcData.vex_total,
       cex: vcData.cex_total,
-      gex: gexLast,
-      dex: dexLast,
+      gex: gexLive,
+      dex: dexLive,
       vexTrend,
       cexTrend,
       gexTrend,
       dexTrend,
       flipDistPct: vcData.gamma_flip_dist_pct,
-      flipLevel:   vcData.gamma_flip          // absolute $ level
+      flipLevel:   vcData.gamma_flip,
+      // V3: passer les directions backend pour zone morte correcte
+      vexDirection: vcData.vex_direction,
+      cexDirection: vcData.cex_direction,
     });
 
     // ── Key levels from narrative ────────────────────────────────────
@@ -973,97 +1000,8 @@ export async function loadRegimeSummary(signal) {
         <div style="font-size:12px;color:#94a3b8;line-height:1.65;border-top:1px solid ${biasColor}33;padding-top:8px;margin-top:4px">${regime.pro}</div>
       </div>
 
-      <div class="regime-advice-bar" style="border-left-color:${regime.color}">
-        <div class="regime-advice-label" style="color:${regime.color}">Contexte structurel</div>
-        <div class="regime-advice-text">${regime.plain}</div>
-      </div>`;
+      `;
   } catch (e) {
     if (el) el.innerHTML = `<div class="error-state"><div class="error-icon">⚠</div>Régime indisponible : ${e.message}</div>`;
   }
-}
-
-export function classifyRegime(vex, cex, gexTotal, dexTotal, flipDistPct) {
-  const vexBull = vex > 0;
-  const cexBull = cex > 0;
-  const gexBull = gexTotal >= 0;
-  const dexBull = dexTotal >= 0;
-
-  const bigVex = Math.abs(vex) > CFG.GEX_BIG_VEX;
-  const bigCex = Math.abs(cex) > CFG.GEX_BIG_CEX;
-
-  // Near flip (within 2%) → explosive potential regardless of direction
-  const nearFlip = flipDistPct !== null && Math.abs(flipDistPct) <= CFG.FLIP_NEAR_PCT;
-
-  // Count bullish signals
-  const bullCount = [vexBull, cexBull, gexBull, dexBull].filter(Boolean).length;
-
-  if (nearFlip && (bigVex || bigCex)) {
-    return {
-      label: 'PRÉPARATION EXPLOSIVE',
-      color: '#f59e0b',
-      dot: '#f59e0b',
-      plain: `Le spot BTC se situe à moins de 2 % du Gamma Flip, avec un VEX et/ou CEX de grande amplitude. Les dealers sont exposés à un repositionnement brutal : un franchissement du flip déclencherait une cascade d'achats ou de ventes de couverture, amplifiant fortement le mouvement initial. C'est la configuration la plus explosive de toutes.`,
-      advice: `Attention aux breakouts : même un faible catalyseur peut déclencher un mouvement extrême. Les options ATM sont très chères, mais les spreads directionnels restent pertinents.`
-    };
-  }
-
-  if (bullCount === 4) {
-    return {
-      label: 'RALENTISSEMENT HAUSSIER',
-      color: '#22c55e',
-      dot: '#22c55e',
-      plain: `Les quatre indicateurs de flux dealers sont alignés à la hausse. VEX positif : une hausse de volatilité pousse les dealers à acheter du BTC. CEX positif : le temps qui passe les force aussi à acheter. GEX et DEX haussiers : ils absorbent les ventes et amortissent les baisses. Le marché est en mode stabilisation — les corrections sont limitées.`,
-      advice: `Privilégier les stratégies vendeuses de volatilité (short puts, iron condors). Les dealers joueront le rôle d'amortisseur. Éviter les longs straddles.`
-    };
-  }
-
-  if (bullCount === 0) {
-    return {
-      label: 'ACCÉLÉRATION BAISSIÈRE',
-      color: '#ef4444',
-      dot: '#ef4444',
-      plain: `Les quatre indicateurs sont négatifs. VEX négatif : toute hausse de volatilité oblige les dealers à vendre du BTC. CEX négatif : le temps qui passe aggrave la pression vendeuse. GEX et DEX négatifs : les dealers amplifient chaque mouvement au lieu de l'amortir. Le marché est en mode amplificateur — les baisses peuvent s'emballer.`,
-      advice: `Configuration idéale pour les stratégies long volatilité (long puts, long straddles). Les corrections peuvent être profondes et rapides. Gérer les stops serrément.`
-    };
-  }
-
-  if (bullCount >= 3) {
-    return {
-      label: 'RALENTISSEMENT MODÉRÉ',
-      color: '#4ade80',
-      dot: '#4ade80',
-      plain: `La majorité des indicateurs de flux pointent vers un soutien des dealers, mais un signal diverge. Le marché est globalement stabilisant, mais avec quelques tensions internes. Les corrections restent contenues, mais le rebond automatique est moins garanti.`,
-      advice: `Neutre légèrement haussier. Les stratégies de range (iron condors, short strangles) fonctionnent bien. Être vigilant sur le signal qui diverge.`
-    };
-  }
-
-  if (bullCount <= 1) {
-    return {
-      label: 'ACCÉLÉRATION MODÉRÉE',
-      color: '#f87171',
-      dot: '#f87171',
-      plain: `La majorité des indicateurs signalent une pression vendeuse de la part des dealers. Les forces d'amplification dominent, mais pas unanimement. Le marché peut s'emballer à la baisse, mais un signal positif peut servir de frein temporaire.`,
-      advice: `Prudent côté acheteur. Les rallyes risquent d'être vendus. Privilégier la protection par des puts ou une réduction d'exposition.`
-    };
-  }
-
-  // bullCount === 2 → balanced / compression
-  const vexCexOpposite = vexBull !== cexBull;
-  if (vexCexOpposite) {
-    return {
-      label: 'COMPRESSION — BREAKOUT IMMINENT',
-      color: '#a855f7',
-      dot: '#a855f7',
-      plain: `VEX et CEX envoient des signaux opposés : la volatilité implicite et le temps tirent les dealers dans des directions contraires. Cette tension interne comprime le marché dans une fourchette étroite, accumulant de l'énergie. Le breakout, quand il arrive, est souvent violent et unilatéral.`,
-      advice: `Excellent timing pour les stratégies long volatilité directionnelles (straddles, strangles longs). Les options bon marché par rapport à la volatilité réalisée représentent une opportunité. Ne pas être trop directionnel.`
-    };
-  }
-
-  return {
-    label: 'INDÉCISION — SIGNAUX MIXTES',
-    color: '#94a3b8',
-    dot: '#94a3b8',
-    plain: `Les indicateurs GEX, DEX, VEX et CEX ne dégagent pas de consensus clair. Les forces haussières et baissières s'équilibrent. Le marché manque de direction et les dealers n'ont pas de biais dominant. Ce type de configuration précède souvent soit une consolidation prolongée, soit une soudaine prise de direction.`,
-    advice: `Rester neutre ou réduire l'exposition. Attendre un alignement des signaux avant de prendre une position directionnelle forte.`
-  };
 }
