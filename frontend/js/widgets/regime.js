@@ -50,8 +50,10 @@ export function buildLevelsContext(btcSpot, lvlFlip, lvlHaut, lvlBas, mpStrike, 
   const roles = [];
   if (lvlFlip)  roles.push('<b style="color:#f59e0b">' + fmtP(lvlFlip) + '</b> = Gamma Flip : niveau où les dealers <i>changent de comportement</i> mécaniquement');
   if (mpStrike) roles.push('<b style="color:#3d8eff">' + fmtP(mpStrike) + '</b> = Max Pain (' + (mpExpiry||'') + ') : niveau vers lequel le marché <i>gravite</i> à l\'approche de l\'expiration');
-  if (lvlHaut)  roles.push('<b style="color:#22c55e">' + fmtP(lvlHaut) + '</b> = Call wall : <i>résistance</i> où les vendeurs d\'options sont concentrés');
-  if (lvlBas)   roles.push('<b style="color:#ef4444">' + fmtP(lvlBas) + '</b> = Put wall : <i>support</i> où les acheteurs de puts sont concentrés');
+  if (lvlHaut && lvlHautLbl) roles.push('<b style="color:#22c55e">' + fmtP(lvlHaut) + '</b> = ' + lvlHautLbl);
+  else if (lvlHaut)          roles.push('<b style="color:#22c55e">' + fmtP(lvlHaut) + '</b> = Résistance options');
+  if (lvlBas  && lvlBasLbl)  roles.push('<b style="color:#ef4444">' + fmtP(lvlBas)  + '</b> = ' + lvlBasLbl);
+  else if (lvlBas)           roles.push('<b style="color:#ef4444">' + fmtP(lvlBas)  + '</b> = Support options');
   if (roles.length) lines.push(roles.join('<br>'));
 
   // ── 2. Convergence triple ────────────────────────────────────────────
@@ -327,15 +329,13 @@ export async function loadRegimeSummary(signal) {
         </div>` : ''}
         ${lvlHaut ? `
         <div style="background:#22c55e0d;border:1px solid #22c55e33;border-radius:10px;padding:10px 12px">
-          <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#22c55e;margin-bottom:3px">▲ Résistance options</div>
+          <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#22c55e;margin-bottom:3px">${lvlHautLbl ? esc(lvlHautLbl) : '▲ Résistance options'}</div>
           <div style="font-size:15px;font-weight:800;color:#22c55e;font-variant-numeric:tabular-nums">${fmtP(lvlHaut)}</div>
-          <div style="font-size:10px;color:#64748b;margin-top:2px">${esc(lvlHautLbl || '')}</div>
         </div>` : ''}
         ${lvlBas ? `
         <div style="background:#ef44440d;border:1px solid #ef444433;border-radius:10px;padding:10px 12px">
-          <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#ef4444;margin-bottom:3px">▼ Support options</div>
+          <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#ef4444;margin-bottom:3px">${lvlBasLbl ? esc(lvlBasLbl) : '▼ Support options'}</div>
           <div style="font-size:15px;font-weight:800;color:#ef4444;font-variant-numeric:tabular-nums">${fmtP(lvlBas)}</div>
-          <div style="font-size:10px;color:#64748b;margin-top:2px">${esc(lvlBasLbl || '')}</div>
         </div>` : ''}
         ${mpStrike ? `
         <div style="grid-column:1/-1;background:#3d8eff11;border:1.5px solid #3d8eff44;border-radius:10px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;gap:8px">
