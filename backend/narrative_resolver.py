@@ -83,73 +83,78 @@ def _build_ladders(spot: float, flip: float | None, mp_strike: float, walls, max
     Chaque entree : {price, types, oi, dist_pct, tag}
     - upside_ladder : niveaux au-dessus du spot (croissant, plus proche en tete)
     - downside_ladder : niveaux en-dessous du spot (decroissant, plus proche en tete)
+
+    Regles :
+    - Prix exact pour flip et max_pain (pas d'arrondi)
+    - OI réel depuis wall.total_oi (BTC)
+    - Déduplication à 0.5% : si flip et wall au même strike → une entrée multi-types
+    - Walls non-DORMANT prioritaires ; fallback sur tous si aucun actif
     """
-    candidates: dict[int, dict] = {}  # price_rounded -> entry
+    # Clé = prix exact (pas arrondi) pour préserver flip et max_pain précis
+    candidates: dict[float, dict] = {}
 
     def _add(price: float, typ: str, oi: float | None = None, tag: str = "WALL"):
         if not price or price <= 0:
             return
-        key = round(price / 100) * 100  # round to nearest 100
-        if key not in candidates:
-            candidates[key] = {"price": float(key), "types": [], "oi": oi, "tag": tag}
-        if typ not in candidates[key]["types"]:
-            candidates[key]["types"].append(typ)
-        if oi and (candidates[key]["oi"] is None or oi > candidates[key]["oi"]):
-            candidates[key]["oi"] = oi
+        # Chercher si un candidat existe déjà à moins de 0.5% de ce prix
+        for existing_price in list(candidates.keys()):
+            if abs(existing_price - price) / spot < 0.005:
+                entry = candidates[existing_price]
+                if typ not in entry["types"]:
+                    entry["types"].append(typ)
+                # Conserver OI le plus élevé
+                if oi and (entry["oi"] is None or oi > entry["oi"]):
+                    entry["oi"] = oi
+                # Promouvoir le tag si plus important (FLIP > WALL > MAX_PAIN)
+                _priority = {"FLIP": 3, "WALL": 2, "MAX_PAIN": 1}
+                if _priority.get(tag, 0) > _priority.get(entry["tag"], 0):
+                    entry["tag"] = tag
+                return
+        # Nouveau candidat
+        candidates[price] = {"price": float(price), "types": [typ], "oi": oi, "tag": tag}
 
-    # Add flip
+    # 1. Flip (prix exact, priorité maximale)
     if flip is not None and flip > 0:
         _add(flip, "FLIP", tag="FLIP")
 
-    # Add max_pain if relevant DTE
+    # 2. Max Pain si expiry proche (≤ 7 jours)
     if mp_strike > 0 and max_pain_dte <= 7:
         _add(mp_strike, "MAX_PAIN", tag="MAX_PAIN")
 
-    # Add walls (prefer non-DORMANT)
-    if walls and hasattr(walls, 'walls'):
-        active_walls = [w for w in walls.walls if getattr(w, 'activity_tag', None) != 'DORMANT']
-        if not active_walls:
-            active_walls = list(walls.walls)[:8]  # fallback
-        for w in active_walls[:10]:
-            strike = getattr(w, 'strike', None)
-            oi = getattr(w, 'oi', None)
+    # 3. Walls — préférer non-DORMANT, fallback sur tous
+    if walls and hasattr(walls, "walls") and walls.walls:
+        active_walls = [
+            w for w in walls.walls
+            if getattr(w, "tag", None) not in ("DORMANT",)
+            and str(getattr(w, "tag", "")).upper() != "DORMANT"
+        ]
+        # Fallback : si aucun actif, prendre tous (max 8)
+        pool = active_walls if active_walls else list(walls.walls)[:8]
+        for w in pool[:10]:
+            strike = getattr(w, "strike", None)
+            # OI réel : total_oi en BTC (champ correct de OptionsWall)
+            oi = getattr(w, "total_oi", None) or getattr(w, "oi", None)
             if strike:
                 _add(float(strike), "WALL", oi=float(oi) if oi else None)
     else:
-        # Fallback: major_call_wall / major_put_wall
-        if hasattr(walls, 'major_call_wall') and walls.major_call_wall:
+        # Fallback profil simplifié
+        if hasattr(walls, "major_call_wall") and walls.major_call_wall:
             _add(float(walls.major_call_wall), "WALL")
-        if hasattr(walls, 'major_put_wall') and walls.major_put_wall:
+        if hasattr(walls, "major_put_wall") and walls.major_put_wall:
             _add(float(walls.major_put_wall), "WALL")
 
-    # Deduplicate: merge entries within 0.5% of each other
-    merged: list[dict] = []
-    sorted_cands = sorted(candidates.values(), key=lambda x: x["price"])
-    for cand in sorted_cands:
-        if merged and abs(cand["price"] - merged[-1]["price"]) / spot < 0.005:
-            # Merge into last
-            last = merged[-1]
-            for t in cand["types"]:
-                if t not in last["types"]:
-                    last["types"].append(t)
-            if cand["oi"] and (last["oi"] is None or cand["oi"] > last["oi"]):
-                last["oi"] = cand["oi"]
-        else:
-            merged.append(dict(cand))
-
-    # Split into upside/downside and compute dist_pct
+    # 4. Split upside / downside, calcul dist_pct
     upside = []
     downside = []
-    for entry in merged:
-        p = entry["price"]
-        dist_pct = (p - spot) / spot * 100
+    for price, entry in candidates.items():
+        dist_pct = (price - spot) / spot * 100
         entry["dist_pct"] = round(dist_pct, 2)
-        if p > spot * 1.002:
+        if price > spot * 1.002:
             upside.append(entry)
-        elif p < spot * 0.998:
+        elif price < spot * 0.998:
             downside.append(entry)
 
-    # Sort: upside ascending (nearest first), downside descending (nearest first)
+    # 5. Tri final
     upside.sort(key=lambda x: x["price"])
     downside.sort(key=lambda x: x["price"], reverse=True)
 
@@ -592,6 +597,8 @@ def resolve_narrative(
         scenario, risque, niveau_haut, niveau_bas,
         range_mode, asymmetric_side, mp_strike, flip, spot,
         flip_use_in_signal=flip_use_in_signal_val,
+        upside_ladder=upside_ladder,
+        downside_ladder=downside_ladder,
     )
     # F8.5 — PIN override : si pin actif, la synthèse principale = message pin
     if pin_active:
@@ -843,7 +850,37 @@ def _build_synthese(
     flip: float,
     spot: float,
     flip_use_in_signal: bool = True,
+    upside_ladder: list | None = None,
+    downside_ladder: list | None = None,
 ) -> str:
+    # F8.4 — Helper : trouve le premier obstacle entre spot et flip dans le ladder
+    def _first_obstacle_up(ladder: list | None, flip_price: float | None) -> dict | None:
+        """Premier niveau upside ENTRE le spot et le flip (exclu), avec OI si dispo."""
+        if not ladder or not flip_price:
+            return None
+        for entry in ladder:  # déjà trié croissant
+            p = entry["price"]
+            if p < flip_price * 0.999:  # strictement sous le flip
+                return entry
+        return None
+
+    def _first_obstacle_dn(ladder: list | None, flip_price: float | None) -> dict | None:
+        """Premier niveau downside ENTRE le spot et le flip (exclu), avec OI si dispo."""
+        if not ladder or not flip_price:
+            return None
+        for entry in ladder:  # déjà trié décroissant
+            p = entry["price"]
+            if p > flip_price * 1.001:  # strictement au-dessus du flip
+                return entry
+        return None
+
+    def _fmt_obstacle(obs: dict) -> str:
+        """Format : '$64,000 (4 047 BTC)' ou '$64,000' si pas d'OI."""
+        p = obs["price"]
+        oi = obs.get("oi")
+        if oi and oi > 0:
+            return f"${p:,.0f} ({oi:,.0f} BTC OI)"
+        return f"${p:,.0f}"
     # ── Range mode ────────────────────────────────────────────────────────────
     if range_mode and asymmetric_side == "DOWN" and flip is not None:
         return (
@@ -883,7 +920,15 @@ def _build_synthese(
         else:
             biais = "biais amplificateur neutre — direction non confirmée"
             invalidation = f"retour confirmé sous ${flip:,.0f}"
-            opp = f"si franchise confirmée au-dessus, accélération haussière violente vers ${niveau_haut:,.0f}"
+            # F8.4 — Mentionner N1 si un obstacle existe entre spot et flip
+            _obs_up = _first_obstacle_up(upside_ladder, flip)
+            if _obs_up:
+                opp = (
+                    f"si franchise de {_fmt_obstacle(_obs_up)} "
+                    f"puis ${flip:,.0f} (flip), accélération haussière violente vers ${niveau_haut:,.0f}"
+                )
+            else:
+                opp = f"si franchise confirmée au-dessus de ${flip:,.0f}, accélération haussière violente vers ${niveau_haut:,.0f}"
 
         return (
             f"{situation} — {biais}. "
@@ -910,7 +955,15 @@ def _build_synthese(
             opp = "si retour haussier, régime change — compression probable"
         else:
             biais = "biais amplificateur neutre — direction non confirmée"
-            invalidation = f"cassure sous ${flip:,.0f}"
+            # F8.4 — Mentionner N1 si un obstacle existe entre spot et flip (côté down)
+            _obs_dn = _first_obstacle_dn(downside_ladder, flip)
+            if _obs_dn:
+                invalidation = (
+                    f"cassure de {_fmt_obstacle(_obs_dn)} "
+                    f"puis ${flip:,.0f} (flip)"
+                )
+            else:
+                invalidation = f"cassure sous ${flip:,.0f}"
             opp = f"si cassure confirmée, accélération baissière violente vers ${niveau_bas:,.0f}"
 
         return (
