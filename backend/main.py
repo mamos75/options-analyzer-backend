@@ -48,6 +48,7 @@ from .system_edge_report import compute_system_edge_report, format_edge_report_t
 from .directional_bias import directional_bias_to_dict
 from .stats_edge import compute_stats_edge
 from .decision_arbiter import compute_decision as _compute_decision
+from .regime_vexcex_engine import classify_regime_vexcex, VexCexInputs as _VexCexInputs
 from .auth import router as auth_router, init_db as init_auth_db
 from .regime_engine import build_regime_engine_output, regime_engine_to_dict
 from .probability_engine import compute_probability_engine, probability_engine_to_dict
@@ -179,6 +180,25 @@ async def _history_saver():
 
             from .vex_cex import compute_vex_cex as _compute_vex_cex
             vc = _compute_vex_cex(snapshot)
+            # V5 — classify VEX/CEX regime for journaling
+            _vexcex_inputs_snap = _VexCexInputs(
+                vex=vc.vex_total,
+                cex=vc.cex_total,
+                gex=gex.total_gex,
+                dex=getattr(dp, 'net_delta_usd', getattr(dp, 'net_delta', 0.0)) or 0.0,
+                spot=snapshot.btc_price,
+                vex_direction=getattr(vc, 'vex_direction', None),
+                cex_direction=getattr(vc, 'cex_direction', None),
+                flip_level=gex.flip_level,
+                flip_dist_pct=(
+                    (snapshot.btc_price - gex.flip_level) / snapshot.btc_price * 100
+                    if gex.flip_level else None
+                ),
+                regime_meca=gex.regime_meca,
+                regime_source=gex.regime_source,
+                gex_flip_incoherent=gex.gex_flip_incoherent,
+            )
+            _snap_regime = classify_regime_vexcex(_vexcex_inputs_snap)
             history_store.save_snapshot(
                 mopi=mopi.score,
                 gex=gex.total_gex,
@@ -192,6 +212,8 @@ async def _history_saver():
                 gex_near=gex.gex_near,             # near-term gamma effectif (DTE ≤ 14)
                 vex=vc.vex_total,
                 cex=vc.cex_total,
+                regime_id=_snap_regime.regime_id,
+                verdict_arbiter=None,  # sera rempli à chaque /api/decision
             )
 
             # ── Probability Engine snapshot ──────────────────────────────────
@@ -1374,6 +1396,31 @@ async def get_decision():
         mde_detail = lb.get(_model_arena._MDE_NAME, {})
         mopi_n_outcomes = mde_detail.get("live_outcomes", 0) or 0
 
+    # V5 — classify VEX/CEX regime for decision
+    try:
+        from .vex_cex import compute_vex_cex as _cvc_dec
+        _vc_dec = _cvc_dec(snapshot)
+    except Exception:
+        _vc_dec = None
+    _vexcex_inputs_dec = _VexCexInputs(
+        vex=getattr(_vc_dec, 'vex_total', 0.0) or 0.0,
+        cex=getattr(_vc_dec, 'cex_total', 0.0) or 0.0,
+        gex=gex.total_gex,
+        dex=getattr(dp, 'net_delta_usd', getattr(dp, 'net_delta', 0.0)) or 0.0,
+        spot=snapshot.btc_price,
+        vex_direction=getattr(_vc_dec, 'vex_direction', None),
+        cex_direction=getattr(_vc_dec, 'cex_direction', None),
+        flip_level=gex.flip_level,
+        flip_dist_pct=(
+            (snapshot.btc_price - gex.flip_level) / snapshot.btc_price * 100
+            if gex.flip_level else None
+        ),
+        regime_meca=gex.regime_meca,
+        regime_source=gex.regime_source,
+        gex_flip_incoherent=gex.gex_flip_incoherent,
+    )
+    _vexcex_regime_dec = classify_regime_vexcex(_vexcex_inputs_dec)
+
     decision = _compute_decision(
         narrative_data=narrative_dict,
         arena_data=arena_health,
@@ -1383,6 +1430,10 @@ async def get_decision():
         flip_use_in_signal=narrative.flip_use_in_signal,
         gex_use_in_signal=narrative.gex_use_in_signal,
         dex_use_in_signal=narrative.dex_use_in_signal,
+        vexcex_regime_id=_vexcex_regime_dec.regime_id,
+        vexcex_phase=_vexcex_regime_dec.phase,
+        vexcex_urgency=_vexcex_regime_dec.urgency,
+        vexcex_label=_vexcex_regime_dec.label,
     )
 
     return {
@@ -1400,6 +1451,12 @@ async def get_decision():
         "arena_leader_ev": decision.arena_leader_ev,
         "generated_at": decision.generated_at,
         "btc_price": snapshot.btc_price,
+        "system_status": decision.system_status,
+        "vexcex_regime_id": decision.vexcex_regime_id,
+        "vexcex_phase": decision.vexcex_phase,
+        "vexcex_urgency": decision.vexcex_urgency,
+        "vexcex_label": decision.vexcex_label,
+        "vexcex_contribution": decision.vexcex_contribution,
     }
 
 

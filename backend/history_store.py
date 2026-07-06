@@ -58,6 +58,15 @@ def init_db():
             c.execute("ALTER TABLE metrics_history ADD COLUMN vex_convention INTEGER DEFAULT 1")
         except Exception:
             pass  # already exists
+        # V5 — regime_id + verdict_arbiter journaling (auto-validation)
+        for col_def in (
+            "regime_id TEXT",
+            "verdict_arbiter TEXT",
+        ):
+            try:
+                c.execute(f"ALTER TABLE metrics_history ADD COLUMN {col_def}")
+            except Exception:
+                pass  # already exists
 
         # Table historique Probability Engine — un snapshot complet par intervalle
         c.execute("""
@@ -104,14 +113,17 @@ def save_snapshot(
     gex_near: float = 0.0,
     vex: float = 0.0,
     cex: float = 0.0,
+    # V5 — regime journaling
+    regime_id: Optional[str] = None,
+    verdict_arbiter: Optional[str] = None,
 ):
     ts = int(time.time())
     with _conn() as c:
         c.execute(
             "INSERT INTO metrics_history"
-            "(ts,mopi,gex,dex,iv_rank,pc_ratio,max_pain,flip_level,btc_price,pc_ratio_near,gex_near,vex,cex,vex_convention)"
-            " VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            (ts, mopi, gex, dex, iv_rank, pc_ratio, max_pain, flip_level, btc_price, pc_ratio_near, gex_near, vex, cex, 2),
+            "(ts,mopi,gex,dex,iv_rank,pc_ratio,max_pain,flip_level,btc_price,pc_ratio_near,gex_near,vex,cex,vex_convention,regime_id,verdict_arbiter)"
+            " VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (ts, mopi, gex, dex, iv_rank, pc_ratio, max_pain, flip_level, btc_price, pc_ratio_near, gex_near, vex, cex, 2, regime_id, verdict_arbiter),
         )
         c.commit()
 

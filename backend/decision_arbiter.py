@@ -7,14 +7,23 @@ Pipeline :
   1. Vérifier la fraîcheur des données (data_health)
   2. Vérifier les contradictions (narrative)
   3. Vérifier l'edge statistique (arena stats)
-  4. Dégrader les moteurs faibles
-  5. Produire la décision finale
-  6. Expliquer les exclusions
+  4. Intégrer le régime VEX/CEX (V5)
+  5. Dégrader les moteurs faibles
+  6. Produire la décision finale
+  7. Expliquer les exclusions
+
+V5 — Fusion VEX/CEX Regime :
+  Le régime VEX/CEX (regime_id depuis regime_vexcex_engine) est un nouvel input.
+  La table de verdicts est indexée par regime_id + contexte (phase, urgency, arena).
+  Règles de dégradation spécifiques au régime :
+    - NEU-* : confiance plafonnée à 20%
+    - COMP-0 CRITIQUE : confiance dégradée si PE "edge insuffisant"
+    - EXP-*-1 + arena LEADER_CLEAR : boost de confiance +15
+    - FL-0 CRITIQUE : verdict forcé OBSERVE (flip zone = pas directionnel)
 """
 
 from __future__ import annotations
 
-import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Optional
@@ -42,6 +51,183 @@ class ArbiteredDecision:
     # DEGRADED    : données stale ou calibration dégradée
     # OFFLINE     : données insuffisantes ou erreur collecte
     system_status: str        # "TRADEABLE" | "OBSERVE" | "CONFLICT" | "DEGRADED" | "OFFLINE"
+    # V5 — régime VEX/CEX
+    vexcex_regime_id: Optional[str] = None   # ex. "EXP-UP-1", "NEU-0", "COMP-0"
+    vexcex_phase: Optional[str] = None       # ex. "EXP", "NEU", "COMP"
+    vexcex_urgency: Optional[str] = None     # ex. "CRITIQUE", "ÉLEVÉE", "NEUTRE"
+    vexcex_label: Optional[str] = None       # ex. "EXPANSION HAUSSIÈRE"
+    vexcex_contribution: Optional[str] = None  # "BOOST" | "DEGRADED" | "NEUTRAL" | "BLOCKED"
+
+
+# ── Table de verdicts VEX/CEX par regime_id ───────────────────────────────
+#
+# Format : regime_id → dict de modificateurs :
+#   confidence_delta  : ajout/retrait de confiance_pct (+15, -10, etc.)
+#   confidence_cap    : plafond confiance_pct (None = pas de cap)
+#   force_verdict     : forcer un verdict précis (None = pas de forçage)
+#   direction_hint    : "UP" | "DOWN" | "RANGE" | None (indice directionnel)
+#   contribution      : "BOOST" | "DEGRADED" | "NEUTRAL" | "BLOCKED"
+#
+# Priorités :
+#   1. force_verdict (absolu)
+#   2. confidence_cap
+#   3. confidence_delta
+#   4. direction_hint (influence signal selection)
+
+_REGIME_VERDICT_TABLE: dict = {
+    # ── NEU : zone morte — dégradation systématique
+    "NEU-0": {
+        "confidence_cap": 20,
+        "confidence_delta": -10,
+        "force_verdict": None,
+        "direction_hint": None,
+        "contribution": "DEGRADED",
+    },
+    "NEU-1": {
+        "confidence_cap": 25,
+        "confidence_delta": -5,
+        "force_verdict": None,
+        "direction_hint": None,
+        "contribution": "DEGRADED",
+    },
+    # ── FL : zone de flip — observation requise
+    "FL-0": {
+        "confidence_cap": 30,
+        "confidence_delta": 0,
+        "force_verdict": "OBSERVE",   # flip critique → jamais directionnel
+        "direction_hint": None,
+        "contribution": "BLOCKED",
+    },
+    "FL-1": {
+        "confidence_cap": 40,
+        "confidence_delta": 0,
+        "force_verdict": None,
+        "direction_hint": None,
+        "contribution": "NEUTRAL",
+    },
+    "COMP-6": {
+        "confidence_cap": 35,
+        "confidence_delta": 0,
+        "force_verdict": None,
+        "direction_hint": None,
+        "contribution": "NEUTRAL",
+    },
+    # ── EXP : expansion directionnelle
+    "EXP-UP-1": {
+        "confidence_cap": None,
+        "confidence_delta": +15,
+        "force_verdict": None,
+        "direction_hint": "UP",
+        "contribution": "BOOST",
+    },
+    "EXP-DOWN-1": {
+        "confidence_cap": None,
+        "confidence_delta": +15,
+        "force_verdict": None,
+        "direction_hint": "DOWN",
+        "contribution": "BOOST",
+    },
+    "EXP-UP-0": {
+        "confidence_cap": None,
+        "confidence_delta": +8,
+        "force_verdict": None,
+        "direction_hint": "UP",
+        "contribution": "BOOST",
+    },
+    "EXP-DOWN-0": {
+        "confidence_cap": None,
+        "confidence_delta": +8,
+        "force_verdict": None,
+        "direction_hint": "DOWN",
+        "contribution": "BOOST",
+    },
+    # ── FB : feedback loop
+    "FB-UP": {
+        "confidence_cap": None,
+        "confidence_delta": +10,
+        "force_verdict": None,
+        "direction_hint": "UP",
+        "contribution": "BOOST",
+    },
+    "FB-DOWN": {
+        "confidence_cap": None,
+        "confidence_delta": +10,
+        "force_verdict": None,
+        "direction_hint": "DOWN",
+        "contribution": "BOOST",
+    },
+    # ── COMP : compression / squeeze
+    "COMP-0": {
+        "confidence_cap": 40,
+        "confidence_delta": -5,
+        "force_verdict": None,
+        "direction_hint": None,       # pas de direction — attendre résolution
+        "contribution": "DEGRADED",
+    },
+    # ── DIV : divergence
+    "DIV-0": {
+        "confidence_cap": 35,
+        "confidence_delta": -10,
+        "force_verdict": None,
+        "direction_hint": None,
+        "contribution": "DEGRADED",
+    },
+    # ── MOD : modéré
+    "MOD-UP": {
+        "confidence_cap": None,
+        "confidence_delta": +5,
+        "force_verdict": None,
+        "direction_hint": "UP",
+        "contribution": "BOOST",
+    },
+    "MOD-DOWN": {
+        "confidence_cap": None,
+        "confidence_delta": +5,
+        "force_verdict": None,
+        "direction_hint": "DOWN",
+        "contribution": "BOOST",
+    },
+    "MOD-MIX": {
+        "confidence_cap": 45,
+        "confidence_delta": 0,
+        "force_verdict": None,
+        "direction_hint": None,
+        "contribution": "NEUTRAL",
+    },
+}
+
+# Règle : si regime urgency = CRITIQUE et phase = COMP → dégradation supplémentaire
+_COMP_CRITIQUE_EXTRA_CAP = 30
+
+
+def _get_regime_modifiers(
+    regime_id: Optional[str],
+    urgency: Optional[str],
+    phase: Optional[str],
+) -> dict:
+    """Retourne les modificateurs pour le regime_id donné."""
+    if not regime_id:
+        return {
+            "confidence_cap": None,
+            "confidence_delta": 0,
+            "force_verdict": None,
+            "direction_hint": None,
+            "contribution": "NEUTRAL",
+        }
+    mods = dict(_REGIME_VERDICT_TABLE.get(regime_id, {
+        "confidence_cap": None,
+        "confidence_delta": 0,
+        "force_verdict": None,
+        "direction_hint": None,
+        "contribution": "NEUTRAL",
+    }))
+    # Dégradation supplémentaire : COMP CRITIQUE
+    if phase == "COMP" and urgency == "CRITIQUE":
+        mods["confidence_cap"] = min(
+            mods.get("confidence_cap") or 100,
+            _COMP_CRITIQUE_EXTRA_CAP,
+        )
+    return mods
 
 
 def compute_decision(
@@ -53,6 +239,11 @@ def compute_decision(
     flip_use_in_signal: bool = True,
     gex_use_in_signal: bool = True,
     dex_use_in_signal: bool = True,
+    # V5 — régime VEX/CEX
+    vexcex_regime_id: Optional[str] = None,
+    vexcex_phase: Optional[str] = None,
+    vexcex_urgency: Optional[str] = None,
+    vexcex_label: Optional[str] = None,
 ) -> ArbiteredDecision:
     """
     Arbitrage final entre tous les signaux disponibles.
@@ -63,6 +254,9 @@ def compute_decision(
     - flip_use_in_signal=False → aucune conclusion basée sur flip
     - Contradictions non résolues → cap confiance à 40%
     - Data stale/insufficient → NO_TRADE automatique
+    - NEU-* VEX/CEX → confiance plafonnée à 20% (V5)
+    - FL-0 → verdict forcé OBSERVE (V5)
+    - EXP-*-1 → boost +15 confiance (V5)
 
     Règle de décision :
     - 0 signal actif → NO_TRADE
@@ -154,6 +348,23 @@ def compute_decision(
         "reason": "LAB ONLY — validation insuffisante. Non utilisés dans la décision.",
     })
 
+    # V5 — VEX/CEX regime signal
+    regime_mods = _get_regime_modifiers(vexcex_regime_id, vexcex_urgency, vexcex_phase)
+    if vexcex_regime_id and vexcex_phase not in ("NEU",):
+        dir_hint = regime_mods.get("direction_hint")
+        contribution = regime_mods.get("contribution", "NEUTRAL")
+        signals_used.append({
+            "name": f"VEX/CEX [{vexcex_regime_id}]",
+            "direction": dir_hint or "RANGE",
+            "detail": vexcex_label or vexcex_regime_id,
+            "weight": "modéré" if contribution == "BOOST" else "faible",
+        })
+    elif vexcex_regime_id:
+        signals_ignored.append({
+            "name": f"VEX/CEX [{vexcex_regime_id}]",
+            "reason": f"Régime {vexcex_phase} — zone morte ou signaux faibles. Non contributif.",
+        })
+
     # ── 3. Edge statistique Arena ───────────────────────────────────────────
     arena_status = "COLLECTING"
     arena_leader = None
@@ -195,17 +406,24 @@ def compute_decision(
     # Contradictions non résolues = confiance plafonnée
     has_contradiction = len(contradictions) > 0
 
+    # V5 — force_verdict prend priorité absolue
+    forced_verdict = regime_mods.get("force_verdict")
+
     if data_quality == "INSUFFICIENT":
         verdict = "NO_TRADE"
         phrase = "Données insuffisantes — attendre la collecte d'un historique exploitable."
         confidence_pct = 0
+    elif forced_verdict:
+        verdict = forced_verdict
+        phrase = f"Régime VEX/CEX {vexcex_regime_id} ({vexcex_label}) — {forced_verdict} imposé."
+        confidence_pct = 30
     elif n_signals == 0:
         verdict = "NO_TRADE"
         phrase = "Aucun signal actif — tous les indicateurs sont dormants ou non extrêmes."
         confidence_pct = 5
     elif range_signals and not up_signals and not down_signals:
         verdict = "OBSERVE"
-        phrase = f"Régime stabilisant — BTC en range. Attendre une cassure confirmée."
+        phrase = "Régime stabilisant — BTC en range. Attendre une cassure confirmée."
         confidence_pct = 40
     elif up_signals and not down_signals and not has_contradiction:
         verdict = "SIGNAL_UP"
@@ -226,11 +444,22 @@ def compute_decision(
         phrase = "Signaux mixtes ou insuffisants — pas d'edge directionnel clair."
         confidence_pct = 15
 
-    # Arena dégrade si NO_EDGE
+    # ── 5. Modifieurs de confiance ─────────────────────────────────────────
+    # Arena
     if arena_status == "NO_EDGE":
         confidence_pct = min(confidence_pct, 30)
     elif arena_status == "LEADER_CLEAR" and arena_leader_wr and arena_leader_wr > 0.55:
         confidence_pct = min(100, confidence_pct + 10)
+
+    # V5 — VEX/CEX regime modifiers (seulement si pas forced_verdict déjà appliqué)
+    if not forced_verdict:
+        delta = regime_mods.get("confidence_delta", 0)
+        cap = regime_mods.get("confidence_cap")
+        confidence_pct = confidence_pct + delta
+        if cap is not None:
+            confidence_pct = min(confidence_pct, cap)
+
+    confidence_pct = max(0, min(100, confidence_pct))
 
     if confidence_pct >= 60:
         confidence = "ÉLEVÉ"
@@ -266,4 +495,9 @@ def compute_decision(
         arena_leader_ev=arena_leader_ev,
         generated_at=datetime.now(timezone.utc).isoformat(),
         system_status=system_status,
+        vexcex_regime_id=vexcex_regime_id,
+        vexcex_phase=vexcex_phase,
+        vexcex_urgency=vexcex_urgency,
+        vexcex_label=vexcex_label,
+        vexcex_contribution=regime_mods.get("contribution"),
     )
