@@ -1343,6 +1343,9 @@ async def get_narrative():
         "directional_bias": directional_bias_to_dict(narrative.directional_bias) if narrative.directional_bias else None,
         # Point 8 — Risk Matrix
         "risk_matrix": narrative.risk_matrix,
+        # F8.4 — Ladders
+        "upside_ladder": narrative.upside_ladder,
+        "downside_ladder": narrative.downside_ladder,
     }
 
 
@@ -1389,6 +1392,9 @@ async def get_decision():
         "asymmetric_side": narrative.asymmetric_side,
         "gex_regime": gex.regime_meca,
         "dex_direction": dp.direction,
+        # F8.8 — contexte DEX pour raison ignorée explicite
+        "dex_activity_context": narrative.dex_activity_context,
+        "dex_activity_label": narrative.dex_activity_label,
     }
 
     try:
@@ -1442,6 +1448,34 @@ async def get_decision():
         vexcex_label=_vexcex_regime_dec.label,
     )
 
+    # F8.6 — Calcul flip_zone (stabilité du gamma flip sur 6h)
+    try:
+        flip_history = history_store.get_flip_history(hours=6)
+        flip_vals = [r["flip_level"] for r in flip_history if r.get("flip_level")]
+        _spot = snapshot.btc_price or 1
+        n = len(flip_vals)
+        if n >= 3:
+            median_flip = sorted(flip_vals)[n // 2]
+            flip_min, flip_max = min(flip_vals), max(flip_vals)
+            amplitude_pct = (flip_max - flip_min) / _spot * 100 if _spot > 0 else 0
+            last3 = flip_vals[:3]
+            is_monotone = (last3[0] >= last3[1] >= last3[2]) or (last3[0] <= last3[1] <= last3[2])
+            flip_display = last3[0] if is_monotone else median_flip
+            flip_moving = is_monotone and abs(last3[0] - last3[2]) / _spot > 0.005
+            flip_zone = {
+                "n": n,
+                "display": flip_display,
+                "min": flip_min,
+                "max": flip_max,
+                "amplitude_pct": round(amplitude_pct, 2),
+                "stable": amplitude_pct < 1.0,
+                "moving": flip_moving,
+            }
+        else:
+            flip_zone = {"n": n, "stable": True, "display": gex.flip_level}
+    except Exception:
+        flip_zone = {"n": 0, "stable": True, "display": gex.flip_level}
+
     return {
         "verdict": decision.verdict,
         "confidence": decision.confidence,
@@ -1465,6 +1499,11 @@ async def get_decision():
         "vexcex_contribution": decision.vexcex_contribution,
         "gex_flip_incoherent": gex.gex_flip_incoherent,
         "structure_mixte": gex.structure_mixte,
+        # F8.3 — state + action (vocabulaire desk premium)
+        "state": decision.state,
+        "action": decision.action,
+        # F8.6 — flip zone stability
+        "flip_zone": flip_zone,
     }
 
 

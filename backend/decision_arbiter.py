@@ -57,6 +57,9 @@ class ArbiteredDecision:
     vexcex_urgency: Optional[str] = None     # ex. "CRITIQUE", "ÉLEVÉE", "NEUTRE"
     vexcex_label: Optional[str] = None       # ex. "EXPANSION HAUSSIÈRE"
     vexcex_contribution: Optional[str] = None  # "BOOST" | "DEGRADED" | "NEUTRAL" | "BLOCKED"
+    # F8.3 — Vocabulaire desk premium
+    state: str = "RAS"    # "RAS" | "TENSION" | "CONFLIT" | "ZONE_CRITIQUE"
+    action: str = "OBSERVER"  # "OBSERVER" | "PRÉPARER" | "AGIR_LONG" | "AGIR_SHORT"
 
 
 # ── Table de verdicts VEX/CEX par regime_id ───────────────────────────────
@@ -310,16 +313,24 @@ def compute_decision(
     if dex_use_in_signal:
         dex_dir = narrative_data.get("dex_direction", "NEUTRAL")
         if dex_dir in ("BULLISH_FLOWS", "BEARISH_FLOWS"):
+            # F8.8 — Enrichir le detail avec dex_activity_label si dispo
+            _dex_lbl = narrative_data.get("dex_activity_label", "")
+            _dex_ctx_used = narrative_data.get("dex_activity_context", "")
+            _dex_detail = f"Flux dealers : {dex_dir}"
+            if _dex_lbl:
+                _dex_detail = f"Flux dealers : {dex_dir} ({_dex_lbl})"
             signals_used.append({
                 "name": "DEX",
                 "direction": "UP" if dex_dir == "BULLISH_FLOWS" else "DOWN",
-                "detail": f"Flux dealers : {dex_dir}",
+                "detail": _dex_detail,
                 "weight": "élevé",
             })
     else:
+        # F8.8 — Raison explicite depuis dex_activity_context (narrative_resolver)
+        _dex_ctx = narrative_data.get("dex_activity_context")
         signals_ignored.append({
             "name": "DEX",
-            "reason": "DEX structurel ou dormant — pas de flux exploitable",
+            "reason": _dex_ctx or "DEX structurel ou dormant — pas de flux exploitable",
         })
 
     # MOPI
@@ -441,7 +452,7 @@ def compute_decision(
         confidence_pct = min(70, 40 + len(down_signals) * 15)
     elif has_contradiction:
         verdict = "OBSERVE"
-        phrase = f"Signaux contradictoires ({len(contradictions)} contradiction(s)) — attendre résolution."
+        phrase = f"Contradiction : {contradictions[0]['detail']}" if contradictions else "Signaux contradictoires — attendre résolution."  # F8.3
         confidence_pct = 20
     else:
         verdict = "OBSERVE"
@@ -484,6 +495,28 @@ def compute_decision(
     else:
         system_status = "OBSERVE"
 
+    # F8.3 — Calcul state + action depuis verdict + contradictions + confidence
+    if data_quality == "INSUFFICIENT":
+        state = "RAS"
+    elif verdict == "NO_TRADE":
+        state = "RAS"
+    elif verdict == "OBSERVE" and len(contradictions) > 0:
+        state = "CONFLIT"
+    elif verdict == "OBSERVE":
+        state = "TENSION"
+    elif confidence_pct < 40:
+        state = "ZONE_CRITIQUE"
+    else:
+        state = "TENSION"
+
+    if verdict in ("SIGNAL_UP", "SIGNAL_DOWN"):
+        if confidence_pct >= 60:
+            action = "AGIR_LONG" if verdict == "SIGNAL_UP" else "AGIR_SHORT"
+        else:
+            action = "PRÉPARER"
+    else:
+        action = "OBSERVER"
+
     return ArbiteredDecision(
         verdict=verdict,
         confidence=confidence,
@@ -504,4 +537,6 @@ def compute_decision(
         vexcex_urgency=vexcex_urgency,
         vexcex_label=vexcex_label,
         vexcex_contribution=regime_mods.get("contribution"),
+        state=state,
+        action=action,
     )
