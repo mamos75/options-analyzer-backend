@@ -1673,7 +1673,19 @@ def _scenario_to_dict(s: ScenarioProbability) -> dict:
     }
 
 
+def _horizon_verdict(bull_prob: float, bear_prob: float) -> str:
+    """F8.2 — Verdict équilibré avec frontière incluse (delta <= 5)."""
+    diff = abs(bull_prob - bear_prob)
+    if diff <= 5:
+        return "EQUILIBRE"
+    return "BIAIS_HAUSSIER" if bull_prob > bear_prob else "BIAIS_BAISSIER"
+
+
 def probability_engine_to_dict(output: ProbabilityEngineOutput) -> dict:
+    b24 = output.bear_24h.probability if output.bear_24h else 50.0
+    u24 = output.bull_24h.probability if output.bull_24h else 50.0
+    b72 = output.bear_72h.probability if output.bear_72h else 50.0
+    u72 = output.bull_72h.probability if output.bull_72h else 50.0
     return {
         "spot": output.spot,
         "timestamp": output.timestamp,
@@ -1689,6 +1701,9 @@ def probability_engine_to_dict(output: ProbabilityEngineOutput) -> dict:
         "bull_24h": _scenario_to_dict(output.bull_24h),
         "bear_72h": _scenario_to_dict(output.bear_72h),
         "bull_72h": _scenario_to_dict(output.bull_72h),
+        # F8.2 — Verdicts horizon pré-calculés (frontière incluse delta<=5)
+        "horizon_verdict_24h": _horizon_verdict(u24, b24),
+        "horizon_verdict_72h": _horizon_verdict(u72, b72),
         # V2 — Crash Regime Gate
         "crash_regime_active": output.crash_regime_active,
         "crash_regime_warning": output.crash_regime_warning,

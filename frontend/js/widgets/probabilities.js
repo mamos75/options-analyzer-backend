@@ -65,7 +65,7 @@ export async function loadProbabilities(signal) {
       const bull = h.bull ?? 0;
       const bear = h.bear ?? 0;
       const delta = Math.abs(bull - bear);
-      const equilibre = delta < EQUILIBRE_DELTA;
+      const equilibre = delta <= EQUILIBRE_DELTA;  // F8.2 — frontière incluse
 
       if (equilibre) {
         // Scores trop proches — pas de biais exploitable
@@ -141,7 +141,7 @@ export async function loadProbabilities(signal) {
         const bull = h.bull ?? 0;
         const bear = h.bear ?? 0;
         const delta = Math.abs(bull - bear);
-        const equilibre = delta < EQUILIBRE_DELTA;
+        const equilibre = delta <= EQUILIBRE_DELTA;  // F8.2 — frontière incluse
         const domScore = equilibre ? Math.max(bull, bear) : (bull >= bear ? bull : bear);
         const bar = document.getElementById(`pb-${hi}-dom`);
         if (bar) bar.style.width = Math.min(domScore, 100) + '%';
