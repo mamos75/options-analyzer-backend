@@ -801,7 +801,17 @@ def _compute_niveau_bas(
         sup = max(supports_below, key=lambda z: z.center)
         return sup.center, f"${sup.center:,.0f} — support principal"
 
-    if walls.major_put_wall < spot * 0.995:
+    # F9.3 — Premier support = max(strike) parmi les murs strictement sous le spot
+    # major_put_wall peut être None ou AU-DESSUS du spot → jamais retourner un niveau > spot
+    if hasattr(walls, "walls") and walls.walls:
+        puts_below = [
+            w for w in walls.walls
+            if w.strike < spot * 0.998
+        ]
+        if puts_below:
+            best_put = max(puts_below, key=lambda w: w.strike)
+            return best_put.strike, f"${best_put.strike:,.0f} — put wall principal"
+    elif walls.major_put_wall and walls.major_put_wall < spot * 0.998:
         return walls.major_put_wall, f"${walls.major_put_wall:,.0f} — put wall principal"
 
     return spot * 0.95, f"${spot * 0.95:,.0f} — zone estimée (pas de support identifié)"
