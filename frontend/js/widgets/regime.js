@@ -40,20 +40,23 @@ const _SYSTEM_COLOR = {
   'OFFLINE':   '#475569',
 };
 
-export function buildLevelsContext(btcSpot, lvlFlip, lvlHaut, lvlBas, mpStrike, mpDte, mpExpiry, flipDistPct, vexBull, cexBull, lvlHautLbl, lvlBasLbl) {
+export function buildLevelsContext(btcSpot, lvlFlip, lvlHaut, lvlBas, mpStrike, mpDte, mpExpiry, flipDistPct, vexBull, cexBull, lvlHautLbl, lvlBasLbl, walls) {
   const fmtP = v => v ? '$' + Math.round(v).toLocaleString() : null;
   const lines = [];
   const THRESH = CFG.LEVELS_NEAR_THRESH;
   const near = (a, b) => a && b && Math.abs(a - b) / b < THRESH;
 
   // ── 1. Glossaire des roles ───────────────────────────────────────────
-  const roles = [];
-  if (lvlFlip)  roles.push('<b style="color:#f59e0b">' + fmtP(lvlFlip) + '</b> = Gamma Flip : niveau où les dealers <i>changent de comportement</i> mécaniquement');
-  if (mpStrike) roles.push('<b style="color:#3d8eff">' + fmtP(mpStrike) + '</b> = Max Pain (' + (mpExpiry||'') + ') : niveau vers lequel le marché <i>gravite</i> à l\'approche de l\'expiration');
-  if (lvlHaut && lvlHautLbl) roles.push('<b style="color:#22c55e">' + fmtP(lvlHaut) + '</b> = ' + lvlHautLbl);
-  else if (lvlHaut)          roles.push('<b style="color:#22c55e">' + fmtP(lvlHaut) + '</b> = Résistance options');
-  if (lvlBas  && lvlBasLbl)  roles.push('<b style="color:#ef4444">' + fmtP(lvlBas)  + '</b> = ' + lvlBasLbl);
-  else if (lvlBas)           roles.push('<b style="color:#ef4444">' + fmtP(lvlBas)  + '</b> = Support options');
+  // Glossaire fusionné : un strike = une ligne, multi-rôles cumulés
+  const _rMap = new Map();
+  const _add = (s, col, lbl) => { if (!s) return; const k = Math.round(s); if (!_rMap.has(k)) _rMap.set(k, {col, lbls:[lbl]}); else _rMap.get(k).lbls.push(lbl); };
+  _add(lvlFlip,   '#f59e0b', 'Gamma Flip — les dealers <i>changent de comportement</i> mécaniquement');
+  _add(mpStrike,  '#3d8eff', 'Max Pain (' + (mpExpiry||'') + ') — le marché <i>gravite</i> vers ce niveau à expiration');
+  _add(lvlHaut,   '#22c55e', lvlHautLbl || 'Résistance options');
+  _add(lvlBas,    '#ef4444', lvlBasLbl  || 'Support options');
+  const roles = [..._rMap.entries()].sort((a,b) => b[0]-a[0]).map(
+    ([k, {col, lbls}]) => '<b style="color:' + col + '">' + fmtP(k) + '</b> = ' + lbls.join(' + ')
+  );
   if (roles.length) lines.push(roles.join('<br>'));
 
   // ── 2. Convergence triple ────────────────────────────────────────────
@@ -146,9 +149,20 @@ export function buildLevelsContext(btcSpot, lvlFlip, lvlHaut, lvlBas, mpStrike, 
   // ── 6. Spot entre Put wall et Flip (pocket baissier) ─────────────────
   if (btcSpot && lvlBas && lvlFlip && btcSpot < lvlFlip && btcSpot > lvlBas) {
     const roomPct = ((btcSpot - lvlBas) / btcSpot * 100).toFixed(1);
+    // F7.5 — detect nearest ATM or near-spot wall as first technical support
+    let _atmLine = '';
+    if (walls && walls.length) {
+      const _nw = walls.filter(w => w.strike && Math.abs(w.strike - btcSpot) / btcSpot < 0.03);
+      const _aw = _nw.find(w => w.side === 'AT_MONEY') || _nw.sort((a,b) => Math.abs(a.strike-btcSpot)-Math.abs(b.strike-btcSpot))[0] || null;
+      if (_aw) {
+        const _oi = _aw.total_oi != null ? Math.round(_aw.total_oi).toLocaleString() + ' BTC' : '';
+        const _wt = _aw.side === 'AT_MONEY' ? 'Call wall ATM' : _aw.type === 'PUT_WALL' ? 'Put wall' : 'Call wall';
+        _atmLine = ' Premier support technique : <b>' + _wt + ' ' + fmtP(_aw.strike) + '</b>' + (_oi ? ' (' + _oi + ' OI)' : '') + '.';
+      }
+    }
     lines.push(
       '&#9888;&#65039; BTC est dans la <b>zone de pression</b> : sous le Flip (' + fmtP(lvlFlip) + ') et au-dessus du support (' + fmtP(lvlBas) + '). ' +
-      'Coussin de ' + roomPct + '% avant le Put wall — les dealers amplifient les mouvements dans cette zone.'
+      'Coussin de ' + roomPct + '% avant le Put wall — les dealers amplifient les mouvements dans cette zone.' + _atmLine
     );
   }
 
@@ -218,11 +232,13 @@ export async function loadRegimeSummary(signal) {
   const el  = document.getElementById('regime-summary-content');
   const dot = document.getElementById('regime-dot-indicator');
   try {
-    const [vcData, decisionData, narrData] = await Promise.all([
+    const [vcData, decisionData, narrData, snapData] = await Promise.all([
       apiFetch('/api/vex_cex', signal),
       apiFetch('/api/decision', signal),
       apiFetch('/api/narrative', signal),
+      apiFetch('/api/snapshot', signal),
     ]);
+    const walls = snapData?.walls?.walls || [];
 
     if (!vcData || vcData.error) throw new Error('vex_cex indisponible');
 
@@ -357,7 +373,7 @@ export async function loadRegimeSummary(signal) {
           mpStrike, mpDte, mpExpiry,
           vcData.gamma_flip_dist_pct,
           vexBull, cexBull,
-          lvlHautLbl, lvlBasLbl
+          lvlHautLbl, lvlBasLbl, walls
         );
         return ctx
           ? `<div style="font-size:12px;color:#c9d1e0;line-height:1.85;margin-bottom:14px;padding:14px 16px;background:rgba(255,255,255,0.03);border-radius:10px;border-left:3px solid #475569">${ctx}</div>`

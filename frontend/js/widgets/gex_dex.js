@@ -35,10 +35,29 @@ export async function loadGexDex(signal) {
     const gexColor = !gexValid ? 'var(--muted)' : lastGex < 0 ? 'var(--red)' : lastGex === 0 ? 'var(--yellow)' : 'var(--green)';
     const dexColor = lastDex > 0 ? 'var(--red)' : 'var(--green)';
 
-    const gexImpact = !gexValid ? 'Donn\u00e9es GEX indisponibles'
-      : lastGex === 0 ? 'GEX = 0 \u2192 Gamma Flip : point de basculement du r\u00e9gime dealers'
-      : lastGex < 0 ? 'GEX n\u00e9gatif \u2192 dealers amplifient les mouvements (amplificateur)'
-      : 'GEX positif \u2192 dealers absorbent les mouvements (stabilisateur / pin effect)';
+    // F7.2 — dynamic legend driven by regime_meca (not raw GEX sign)
+    let gexRegimeMeca = null;
+    try {
+      const snap = await apiFetch('/api/snapshot');
+      gexRegimeMeca = snap?.dashboard?.gex_regime || null;
+    } catch(_) {}
+
+    let gexImpact;
+    if (!gexValid) {
+      gexImpact = 'Donn\u00e9es GEX indisponibles';
+    } else if (gexRegimeMeca === 'AMPLIFICATEUR') {
+      const absGex = lastGex != null ? (Math.abs(lastGex)/1e9).toFixed(2) : '?';
+      gexImpact = `Spot sous le Gamma Flip — les dealers amplifient les mouvements. Intensit\u00e9 globale (${absGex}B) mesure la force du pin au-dessus.`;
+    } else if (gexRegimeMeca === 'STABILISANT') {
+      gexImpact = 'Spot au-dessus du Gamma Flip — les dealers absorbent les mouvements (pin effect).';
+    } else if (gexRegimeMeca === 'ZONE_DE_FLIP') {
+      gexImpact = 'Sur la ligne de bascule — r\u00e9gime ind\u00e9termin\u00e9, chaque mouvement peut inverser la dynamique.';
+    } else {
+      // fallback signe GEX si regime_meca indisponible
+      gexImpact = lastGex === 0 ? 'GEX = 0 \u2192 Gamma Flip : point de basculement du r\u00e9gime dealers'
+        : lastGex < 0 ? 'GEX n\u00e9gatif \u2192 dealers amplifient les mouvements (amplificateur)'
+        : 'GEX positif \u2192 dealers absorbent les mouvements (stabilisateur / pin effect)';
+    }
     const dexImpact = lastDex > 0
       ? 'DEX positif \u2192 dealers couvrent en vendant BTC si le prix monte (r\u00e9sistance)'
       : 'DEX n\u00e9gatif \u2192 dealers ach\u00e8tent BTC si le prix baisse (support)';

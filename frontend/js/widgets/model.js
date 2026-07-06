@@ -31,11 +31,21 @@ export async function loadModel(signal) {
   const winRate = principal.avg_winrate ?? principal.win_rate ?? null;
   const n       = principal.n_evaluated ?? principal.total_predictions ?? null;
 
+  // F7.4 — baseline context : 3 classes par défaut (BEAR/BULL/FLAT), hasard = 33%
+  const nClasses  = data.n_classes || principal.n_classes || 3;
+  const baseline  = 100 / nClasses;  // hasard = 33.3% pour 3 classes
+  const wrPct     = winRate !== null ? winRate * 100 : null;
+  const aboveBase = wrPct !== null && wrPct >= baseline;
+  const wrColor   = wrPct === null ? 'var(--muted)' : aboveBase ? 'var(--green)' : '#ef4444';
+  const wrBadge   = !aboveBase && wrPct !== null
+    ? `<span style="font-size:9px;background:#ef444422;color:#ef4444;border-radius:4px;padding:1px 5px;margin-left:6px">⚠ sous hasard</span>`
+    : '';
+
   el.innerHTML = `
     <div class="model-row">
       <div class="model-name">${esc(name)}${version ? `<span style="font-size:10px;color:var(--muted);margin-left:6px">${esc(version)}</span>` : ''}</div>
       <div class="model-stats">
-        ${winRate !== null ? `<div class="model-stat"><span>Win Rate</span><span style="color:var(--green)">${fmtPct(winRate * 100)}</span></div>` : ''}
+        ${wrPct !== null ? `<div class="model-stat"><span>Win Rate</span><span style="color:${wrColor}">${fmtPct(wrPct)}${wrBadge}</span><span style="font-size:9px;color:var(--muted);margin-left:4px">(hasard = ${fmtPct(baseline)}, ${nClasses} classes)</span></div>` : ''}
         ${n !== null ? `<div class="model-stat"><span>Évaluations</span><span>${Number(n).toLocaleString()}</span></div>` : ''}
         ${status ? `<div class="model-stat"><span>Statut</span><span style="color:var(--yellow)">${esc(status)}</span></div>` : ''}
       </div>
