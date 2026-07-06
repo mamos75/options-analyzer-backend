@@ -63,7 +63,7 @@ class ArbiteredDecision:
     vexcex_label: Optional[str] = None       # ex. "EXPANSION HAUSSIÈRE"
     vexcex_contribution: Optional[str] = None  # "BOOST" | "DEGRADED" | "NEUTRAL" | "BLOCKED"
     # F8.3 — Vocabulaire desk premium
-    state: str = "RAS"    # "RAS" | "TENSION" | "CONFLIT" | "ZONE_CRITIQUE"
+    state: str = "RAS"    # "RAS" | "TENSION" | "CONFLIT" | "CRITIQUE"
     action: str = "OBSERVER"  # "OBSERVER" | "PRÉPARER" | "AGIR_LONG" | "AGIR_SHORT"
 
 
@@ -338,16 +338,18 @@ def compute_decision(
             "reason": _dex_ctx or "DEX structurel ou dormant — pas de flux exploitable",
         })
 
-    # MOPI — F12 validation : edge 24h (WR 79% high, 89% low, Wilson LB >0.72)
-    #         Pas d'edge 4h (WR 44% sur N=177, Wilson LB 0.375 < 0.50)
-    #         → signal qualifié horizon 24h uniquement
+    # MOPI — F13 validation ÉPISODES (gap >6h) :
+    #   HIGH>70 : 17 épisodes, WR 68.8%, Wilson LB 0.482 → PAS d'edge vs baseline 49.0%
+    #   LOW<30  : 9 épisodes, WR 75.0%, Wilson LB 0.460 → PAS d'edge
+    #   Monthly instabilité : juillet 2026 WR=100% (5 épisodes) — artefact régime
+    #   → signal conservé comme indicateur directionnel, poids réduit à "faible"
     if mopi_n_outcomes >= 30 and (mopi_score > MOPI_SIGNAL_HIGH or mopi_score < MOPI_SIGNAL_LOW):
         direction = "UP" if mopi_score > MOPI_SIGNAL_HIGH else "DOWN"
         signals_used.append({
             "name": "MOPI",
             "direction": direction,
-            "detail": f"MOPI {mopi_score:.0f}/100 — signal extrême horizon 24h (WR validé 79%+, N={mopi_n_outcomes})",
-            "weight": "modéré",
+            "detail": f"MOPI {mopi_score:.0f}/100 — signal extrême horizon 24h (indicateur directionnel, N={mopi_n_outcomes})",
+            "weight": "faible",
             "horizon": "24h",
         })
     else:
@@ -452,14 +454,30 @@ def compute_decision(
     elif up_signals and not down_signals and not has_contradiction:
         verdict = "SIGNAL_UP"
         names = " + ".join(s["name"] for s in up_signals)
-        # F9.5 — trigger réel : cassure du premier niveau de l'échelle
-        phrase = f"Signal haussier convergent ({names}). Attendre cassure confirmée du premier niveau upside."
+        # F13.5 — "convergent" seulement si ≥2 sources ; niveau nommé si disponible
+        niveau_haut = narrative_data.get("niveau_haut")
+        if len(up_signals) >= 2:
+            phrase = f"Signal haussier convergent ({names})."
+        else:
+            phrase = f"Signal haussier ({names})."
+        if niveau_haut:
+            phrase += f" Attendre cassure de ${niveau_haut:,.0f} confirmée."
+        else:
+            phrase += " Attendre cassure du premier niveau upside confirmée."
         confidence_pct = min(70, 40 + len(up_signals) * 15)
     elif down_signals and not up_signals and not has_contradiction:
         verdict = "SIGNAL_DOWN"
         names = " + ".join(s["name"] for s in down_signals)
-        # F9.5 — trigger réel
-        phrase = f"Signal baissier convergent ({names}). Attendre cassure confirmée du premier niveau downside."
+        # F13.5 — "convergent" seulement si ≥2 sources ; niveau nommé si disponible
+        niveau_bas = narrative_data.get("niveau_bas")
+        if len(down_signals) >= 2:
+            phrase = f"Signal baissier convergent ({names})."
+        else:
+            phrase = f"Signal baissier ({names})."
+        if niveau_bas:
+            phrase += f" Attendre cassure de ${niveau_bas:,.0f} confirmée."
+        else:
+            phrase += " Attendre cassure du premier niveau downside confirmée."
         confidence_pct = min(70, 40 + len(down_signals) * 15)
     elif has_contradiction:
         verdict = "OBSERVE"
@@ -516,7 +534,7 @@ def compute_decision(
     elif verdict == "OBSERVE":
         state = "TENSION"
     elif confidence_pct < 40:
-        state = "ZONE_CRITIQUE"
+        state = "CRITIQUE"
     else:
         state = "TENSION"
 

@@ -69,7 +69,7 @@ export async function loadMopiVsBtc(signal) {
   }
 }
 
-// F12.4 — Track record panel : résultats de validation MOPI
+// F13.3 — Track record panel mis à jour : épisodes, lift vs baseline, badges corrects
 async function _loadMopiTrackRecord() {
   const el = document.getElementById('mopi-track-record');
   if (!el) return;
@@ -80,35 +80,68 @@ async function _loadMopiTrackRecord() {
     const r = v.results || {};
     const verdict = v.verdict || {};
     const status = verdict.signal_status || '';
-    const n = v.n_snapshots_total || 0;
+    const preliminary = verdict.preliminary === true;
+    const baseline = v.baseline || {};
+    const baselineWr = baseline.wr != null ? (baseline.wr * 100).toFixed(1) : null;
 
-    const statusColor = status === 'validé_24h' ? 'var(--green)' :
-                        status === 'partiel_24h' ? 'var(--yellow)' : '#ef4444';
-    const statusLabel = status === 'validé_24h' ? 'Validé horizon 24h' :
-                        status === 'partiel_24h' ? 'Partiel 24h' :
-                        status === 'recalibrer' ? 'À recalibrer' : 'Pas d\'edge';
-
-    function fmtBucket(b, dirLabel) {
-      if (!b || b.n === 0) return 'n=0';
-      const lb = b.wilson_lb !== null ? (b.wilson_lb * 100).toFixed(0) + '%' : '-';
-      const wr = b.wr !== null ? (b.wr * 100).toFixed(0) + '%' : '-';
-      const edge = b.has_edge ? ' ✓' : '';
-      return `${dirLabel} WR ${wr} (LB ${lb}, n=${b.n})${edge}`;
+    // Badge couleur et libellé
+    let statusColor, statusLabel;
+    if (preliminary) {
+      statusColor = '#f97316';
+      statusLabel = 'Validation préliminaire';
+    } else if (status === 'validé_24h') {
+      statusColor = 'var(--green)';
+      statusLabel = 'Validé horizon 24h';
+    } else if (status === 'partiel_24h') {
+      statusColor = 'var(--yellow)';
+      statusLabel = 'Partiel 24h';
+    } else if (status === 'recalibrer') {
+      statusColor = '#ef4444';
+      statusLabel = 'À recalibrer';
+    } else {
+      statusColor = '#ef4444';
+      statusLabel = 'Pas d\'edge';
     }
 
-    el.innerHTML = `
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-        <span style="font-weight:700;color:var(--txt2)">Track record MOPI</span>
-        <span style="background:${statusColor}22;color:${statusColor};padding:2px 7px;border-radius:4px;font-size:10px;font-weight:600">${statusLabel}</span>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 12px">
-        <div style="color:var(--muted)">Signal >70 @4h</div><div>${fmtBucket(r.high_4h, 'UP')}</div>
-        <div style="color:var(--muted)">Signal >70 @24h</div><div style="color:${r.high_24h?.has_edge ? 'var(--green)' : 'var(--txt3)'}">${fmtBucket(r.high_24h, 'UP')}</div>
-        <div style="color:var(--muted)">Signal <30 @4h</div><div>${fmtBucket(r.low_4h, 'DOWN')}</div>
-        <div style="color:var(--muted)">Signal <30 @24h</div><div style="color:${r.low_24h?.has_edge ? 'var(--green)' : 'var(--txt3)'}">${fmtBucket(r.low_24h, 'DOWN')}</div>
-      </div>
-      <div style="margin-top:6px;font-size:10px;color:var(--muted)">${n} snapshots · Wilson LB 95% IC unilat. · seuils ${v.thresholds?.high}/${v.thresholds?.low}</div>
-    `;
+    function fmtBucket(b, dirLabel) {
+      if (!b || b.n_episodes === 0) return 'n=0';
+      const ep = b.n_episodes != null ? b.n_episodes : b.n;
+      const heures = b.n_heures != null ? b.n_heures : b.n;
+      const lb = b.wilson_lb !== null ? (b.wilson_lb * 100).toFixed(1) + '%' : '-';
+      const wr = b.wr !== null ? (b.wr * 100).toFixed(1) + '%' : '-';
+      const edge = b.has_edge ? ' \u2713' : '';
+      let liftStr = '';
+      if (baselineWr !== null && b.wr !== null) {
+        const liftPts = (b.wr * 100 - parseFloat(baselineWr)).toFixed(1);
+        liftStr = ' vs baseline ' + baselineWr + '% \u2192 ' + (liftPts > 0 ? '+' : '') + liftPts + ' pts';
+      }
+      return dirLabel + ' WR ' + wr + liftStr + ' (LB ' + lb + ', ' + ep + ' \u00e9pisodes/' + heures + 'h)' + edge;
+    }
+
+    const prelimNote = preliminary
+      ? '<div style="margin-top:5px;padding:4px 7px;background:#f9731622;border-radius:4px;color:#f97316;font-size:10px">n &lt; 30 \u00e9pisodes \u2014 \u00e9chantillons chevauchants, recalcul en cours</div>'
+      : '';
+
+    const baselineNote = baselineWr !== null
+      ? '<span>Baseline 24h : ' + baselineWr + '% (n=' + (baseline.n || '?') + ')</span>'
+      : '';
+
+    el.innerHTML =
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
+        '<span style="font-weight:700;color:var(--txt2)">Track record MOPI</span>' +
+        '<span style="background:' + statusColor + '22;color:' + statusColor + ';padding:2px 7px;border-radius:4px;font-size:10px;font-weight:600">' + statusLabel + '</span>' +
+      '</div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 12px">' +
+        '<div style="color:var(--muted)">Signal &gt;70 @4h</div><div>' + fmtBucket(r.high_4h, 'UP') + '</div>' +
+        '<div style="color:var(--muted)">Signal &gt;70 @24h</div><div style="color:' + (r.high_24h && r.high_24h.has_edge ? 'var(--green)' : 'var(--txt3)') + '">' + fmtBucket(r.high_24h, 'UP') + '</div>' +
+        '<div style="color:var(--muted)">Signal &lt;30 @4h</div><div>' + fmtBucket(r.low_4h, 'DOWN') + '</div>' +
+        '<div style="color:var(--muted)">Signal &lt;30 @24h</div><div style="color:' + (r.low_24h && r.low_24h.has_edge ? 'var(--green)' : 'var(--txt3)') + '">' + fmtBucket(r.low_24h, 'DOWN') + '</div>' +
+      '</div>' +
+      prelimNote +
+      '<div style="margin-top:6px;font-size:10px;color:var(--muted);display:flex;gap:12px">' +
+        '<span>' + (v.n_snapshots_total || 0) + ' snapshots \u00b7 validation par \u00e9pisodes (gap &gt;6h)</span>' +
+        baselineNote +
+      '</div>';
   } catch(e) {
     if (el) el.innerHTML = '<span style="color:var(--muted);font-size:10px">Track record indisponible</span>';
   }
