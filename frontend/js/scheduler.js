@@ -23,10 +23,13 @@ import { loadVexCex, drawVcCharts } from './widgets/vex_cex.js';
 let _nextRefreshAt = 0;
 
 export async function loadBtcPrice() {
+  // F6 — source unique : /api/snapshot.spot (même snapshot que dashboard/narrative/decision)
+  // Supprime l'écart header vs widgets dû à deux sources (Binance RT vs Deribit cache)
   try {
-    const resp = await fetch('https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT');
+    const resp = await fetch('/api/snapshot');
     const data = await resp.json();
-    const price = parseFloat(data.price);
+    const price = parseFloat(data.spot);
+    if (!Number.isFinite(price)) throw new Error('spot invalide');
     const el = document.getElementById('btc-price');
     el.textContent = fmtPrice(price);
     const storeModule = await import('./store.js');
