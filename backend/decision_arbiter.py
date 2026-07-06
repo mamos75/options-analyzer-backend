@@ -338,19 +338,22 @@ def compute_decision(
             "reason": _dex_ctx or "DEX structurel ou dormant — pas de flux exploitable",
         })
 
-    # MOPI
+    # MOPI — F12 validation : edge 24h (WR 79% high, 89% low, Wilson LB >0.72)
+    #         Pas d'edge 4h (WR 44% sur N=177, Wilson LB 0.375 < 0.50)
+    #         → signal qualifié horizon 24h uniquement
     if mopi_n_outcomes >= 30 and (mopi_score > MOPI_SIGNAL_HIGH or mopi_score < MOPI_SIGNAL_LOW):
         direction = "UP" if mopi_score > MOPI_SIGNAL_HIGH else "DOWN"
         signals_used.append({
             "name": "MOPI",
             "direction": direction,
-            "detail": f"MOPI {mopi_score:.0f}/100 — signal extrême (N={mopi_n_outcomes})",
+            "detail": f"MOPI {mopi_score:.0f}/100 — signal extrême horizon 24h (WR validé 79%+, N={mopi_n_outcomes})",
             "weight": "modéré",
+            "horizon": "24h",
         })
     else:
         # Deux cas distincts pour ne pas mentir sur la raison réelle
         if mopi_n_outcomes < 30:
-            reason = f"MOPI {mopi_score:.0f}/100 — historique insuffisant ({mopi_n_outcomes} outcomes < 30 requis)"
+            reason = f"MOPI {mopi_score:.0f}/100 — historique insuffisant ({mopi_n_outcomes} snapshots < 30 requis)"
         else:
             reason = f"MOPI {mopi_score:.0f}/100 — dans la zone neutre (signal extrême requis : >{MOPI_SIGNAL_HIGH} ou <{MOPI_SIGNAL_LOW})"
         signals_ignored.append({"name": "MOPI", "reason": reason})

@@ -71,7 +71,7 @@ export async function loadAllData() {
     loadGexDex(signal),
     loadMopiVsBtc(signal),
     loadNarrative(signal),
-    loadModel(signal),
+    // loadModel removed F12 — model card hidden, background eval continues via /api/model_arena
     loadVexCex(signal),
   ]);
 
@@ -82,7 +82,7 @@ export async function loadAllData() {
   drawVcCharts(storeModule.vcPeriod);
 
   // Show stale indicator for any failed modules
-  const moduleIds = ['m2-content','m3-content','m4-content','m7-content','m8-content','m9-content','m5-content','m6-content','vex-cex-content'];
+  const moduleIds = ['m2-content','m3-content','m4-content','m7-content','m8-content','m9-content','m5-content','vex-cex-content']; // m6-content removed F12
   results.forEach((r, i) => {
     const el = document.getElementById(moduleIds[i]);
     if (!el) return;

@@ -1439,11 +1439,19 @@ async def get_decision():
     except Exception:
         arena_health = None
 
-    mopi_n_outcomes = 0
+    # F12.1 — mopi_n_outcomes depuis metrics_history (source réelle)
+    # L'ancienne source (model_arena._MDE_NAME outcomes) est vide → signal MOPI toujours ignoré
+    # On utilise le nombre de snapshots avec mopi > 70 ou < 30 sur les 30 derniers jours
+    try:
+        _mopi_rows = history_store.get_last_n_snapshots(1000)
+        _mopi_n_high = sum(1 for r in _mopi_rows if (r.get("mopi") or 0) > 70)
+        _mopi_n_low  = sum(1 for r in _mopi_rows if (r.get("mopi") or 0) < 30)
+        mopi_n_outcomes = max(_mopi_n_high, _mopi_n_low)
+    except Exception:
+        mopi_n_outcomes = 0
+    # Conserver la lecture arena pour arena_status/confidence modifier
     if arena_health:
         lb = arena_health.get("leaderboard_detail", {})
-        mde_detail = lb.get(_model_arena._MDE_NAME, {})
-        mopi_n_outcomes = mde_detail.get("live_outcomes", 0) or 0
 
     # V5 — classify VEX/CEX regime for decision
     try:
@@ -2589,6 +2597,17 @@ def list_snapshot_golden():
             except Exception:
                 files.append({"file": fn})
     return {"files": files}
+
+
+@app.get("/api/mopi_validation")
+def get_mopi_validation(high: float = 70.0, low: float = 30.0):
+    """F12.3 — Self-validation MOPI : WR conditionnel sur données historiques réelles.
+
+    Retourne WR, Wilson LB (95% IC unilatéral), n pour les signaux >high / <low à +4h/+24h.
+    Utilise metrics_history (snapshot toutes les ~30min depuis mai 2026).
+    """
+    from .mopi_validation import compute_mopi_validation
+    return compute_mopi_validation(high_threshold=high, low_threshold=low)
 
 
 @app.get("/api/health_snapshot")
