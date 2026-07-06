@@ -152,25 +152,22 @@ export async function initApp() {
       const params = new URLSearchParams(hash.slice(1));
       const accessToken = params.get('access_token');
       if (accessToken) {
-        const resp = await fetch('https://ncltwnrrzrqtxgxchnaf.supabase.co/auth/v1/user', {
-          headers: {
-            'Authorization': 'Bearer ' + accessToken,
-            'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5jbHR3bnJyenJxdHhneGNobmFmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYwNjY4OTIsImV4cCI6MjA5MTY0Mjg5Mn0.JShY8xzrBpErlfrdXt2PuuByZ1Zy9oaKNU6IvAhCArY'
-          }
-        });
-        if (resp.ok) {
-          const user = await resp.json();
-          const plan = user.user_metadata?.plan ?? '';
-          const email = user.email ?? '';
+        // Decode JWT claims directly — no network call needed, plan/premium_active are in the token
+        try {
+          const payloadB64 = accessToken.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+          const payload = JSON.parse(atob(payloadB64));
+          const meta = payload.user_metadata || {};
+          const plan = meta.plan ?? '';
+          const email = payload.email ?? meta.email ?? '';
           if (plan) {
             localStorage.setItem('mamos_trading_session', JSON.stringify({
               plan,
               email,
-              premium_active: user.user_metadata?.premium_active === true,
+              premium_active: meta.premium_active === true,
               ts: Date.now()
             }));
           }
-        }
+        } catch (_) {}
       }
       history.replaceState(null, '', window.location.pathname + window.location.search);
     }
