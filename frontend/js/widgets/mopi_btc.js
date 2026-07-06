@@ -40,8 +40,16 @@ export async function loadMopiVsBtc(signal) {
           <div class="mopi-stat-val">${corr}</div>
         </div>
         <div class="mopi-stat-box">
-          <div class="mopi-stat-lbl">Signaux >70</div>
-          <div class="mopi-stat-val" style="color:var(--green)">${data.crossovers_above_70 ?? '\u2014'}</div>
+          <div class="mopi-stat-lbl">Signaux &gt;70</div>
+          <div class="mopi-stat-val" style="color:var(--green)">${(() => {
+            const xs = data.crossovers_above_70;
+            if (!xs || !xs.length) return '\u2014';
+            const count = xs.length;
+            const last = xs[xs.length - 1];
+            const d = new Date(last * 1000);
+            const fmt = d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+            return count + ' <span style="font-size:9px;font-weight:400;color:var(--muted)">dernier : ' + fmt + '</span>';
+          })()}</div>
         </div>
       </div>
     `;

@@ -332,7 +332,11 @@ def compute_decision(
             "weight": "modéré",
         })
     else:
-        reason = f"MOPI {mopi_score:.0f}/100 — non extrême ou N insuffisant ({mopi_n_outcomes} outcomes)"
+        # Deux cas distincts pour ne pas mentir sur la raison réelle
+        if mopi_n_outcomes < 30:
+            reason = f"MOPI {mopi_score:.0f}/100 — historique insuffisant ({mopi_n_outcomes} outcomes < 30 requis)"
+        else:
+            reason = f"MOPI {mopi_score:.0f}/100 — dans la zone neutre (signal extrême requis : ≥80 ou ≤20)"
         signals_ignored.append({"name": "MOPI", "reason": reason})
 
     # Flip
