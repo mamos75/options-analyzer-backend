@@ -653,7 +653,8 @@ class DashboardResponse(BaseModel):
     regime_meca: str = "NEUTRE"              # STABILISANT | AMPLIFICATEUR | ZONE_DE_FLIP | NEUTRE
     regime_source: str = "gex_estime"        # "flip" | "gex_estime"
     gex_intensity: float = 0.0               # |gex_total| — magnitude separee du regime
-    gex_flip_incoherent: bool = False        # True si signe GEX contredit le regime mecanique
+    gex_flip_incoherent: bool = False        # True si GEX local (±2% spot) contredit le regime mecanique
+    structure_mixte: bool = False             # GEX total diverge mais local confirme — informatif
 
 
 def _mp_dict(mp: MaxPainExpiry) -> dict:
@@ -764,6 +765,7 @@ async def get_snapshot():
         "gex_total":             gex.total_gex,
         "gex_regime":            gex.regime_meca,   # source unique — gex.regime est alias déprécié
         "gex_flip_incoherent":   gex.gex_flip_incoherent,
+        "structure_mixte":        gex.structure_mixte,
         "flip_level":            gex.flip_level,
         "mopi_score":            mopi.score,
         "mopi_label":            mopi.label,
@@ -885,6 +887,7 @@ async def get_dashboard():
         regime_source=gex.regime_source,
         gex_intensity=gex.gex_intensity,
         gex_flip_incoherent=gex.gex_flip_incoherent,
+        structure_mixte=gex.structure_mixte,
     )
 
 
@@ -1461,6 +1464,7 @@ async def get_decision():
         "vexcex_label": decision.vexcex_label,
         "vexcex_contribution": decision.vexcex_contribution,
         "gex_flip_incoherent": gex.gex_flip_incoherent,
+        "structure_mixte": gex.structure_mixte,
     }
 
 

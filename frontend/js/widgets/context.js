@@ -58,6 +58,7 @@ export async function loadContext(signal) {
     const gexLabel = GEX_LABELS[gex] || gex;
     const gexColor = GEX_COLORS[gex] || 'var(--text)';
     const flipIncoherent = !!(dash.gex_flip_incoherent);
+    const structureMixte = !!(dash.structure_mixte);
 
     el.innerHTML = `
       <div class="context-grid">
@@ -83,6 +84,7 @@ export async function loadContext(signal) {
         </div>
       </div>
       ${flipIncoherent ? '<div class="stale-banner" style="margin-top:8px;padding:6px 10px;background:rgba(234,179,8,0.15);border-left:3px solid var(--yellow);border-radius:4px;font-size:0.78rem;color:var(--yellow)">⚠ Signaux GEX/flip contradictoires — fiabilité réduite</div>' : ''}
+      ${structureMixte && !flipIncoherent ? '<div style="margin-top:8px;padding:6px 10px;background:rgba(99,179,237,0.1);border-left:3px solid #63b3ed;border-radius:4px;font-size:0.78rem;color:#63b3ed">ℹ Structure mixte — calls éloignés dominent le GEX total, local cohérent avec le régime</div>' : ''}
     `;
   } catch(e) {
     if (el) el.innerHTML = `<div class="error-state"><div class="error-icon">\u26a0</div>Erreur inattendue</div>`;

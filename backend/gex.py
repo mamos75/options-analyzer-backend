@@ -84,7 +84,8 @@ class GEXProfile:
     regime_meca: str = "NEUTRE"           # STABILISANT | AMPLIFICATEUR | ZONE_DE_FLIP | NEUTRE
     regime_source: str = "gex_estime"    # "flip" | "gex_estime"
     gex_intensity: float = 0.0           # |gex_total| — magnitude separee du regime
-    gex_flip_incoherent: bool = False    # True si signe GEX contredit le regime mecanique
+    gex_flip_incoherent: bool = False    # True si GEX local (±2% spot) contredit le regime mecanique
+    structure_mixte: bool = False         # GEX total contredit regime mais local confirme — informatif seulement
 
 
 def compute_effective_gamma_horizons(snapshot: MarketSnapshot) -> GEXHorizons:
@@ -166,7 +167,7 @@ def compute_gex(snapshot: MarketSnapshot) -> GEXProfile:
     regime = _classify_regime(total_gex)
     horizons = compute_effective_gamma_horizons(snapshot)
     # V3-bis — regime mecanique (source unique)
-    meca = classify_regime_spot_flip(spot, flip_level, total_gex)
+    meca = classify_regime_spot_flip(spot, flip_level, total_gex, gex_by_strike)
 
     return GEXProfile(
         total_gex=total_gex,
@@ -190,6 +191,7 @@ def compute_gex(snapshot: MarketSnapshot) -> GEXProfile:
         regime_source=meca["regime_source"],
         gex_intensity=meca["gex_intensity"],
         gex_flip_incoherent=meca["gex_flip_incoherent"],
+        structure_mixte=meca["structure_mixte"],
     )
 
 
@@ -621,6 +623,7 @@ def classify_regime_spot_flip(
     spot: float,
     flip: Optional[float],
     total_gex: float,
+    gex_by_strike: Optional[Dict[float, float]] = None,
 ) -> dict:
     """V3-bis — Regime mecanique unique base sur la position spot/flip.
 
@@ -630,12 +633,24 @@ def classify_regime_spot_flip(
     NEUTRE        : flip non detecte — fallback signe GEX total
 
     Retourne :
-      regime_meca    : str  — STABILISANT | AMPLIFICATEUR | ZONE_DE_FLIP | NEUTRE
-      regime_source  : str  — "flip" | "gex_estime"
-      gex_intensity  : float — |gex_total| (magnitude, separee du regime)
-      gex_flip_incoherent : bool — si le signe GEX contredit le regime mecanique
+      regime_meca         : str   — STABILISANT | AMPLIFICATEUR | ZONE_DE_FLIP | NEUTRE
+      regime_source       : str   — "flip" | "gex_estime"
+      gex_intensity       : float — |gex_total| (magnitude, separee du regime)
+      gex_flip_incoherent : bool  — GEX local (±2% spot) contredit le regime mecanique
+      structure_mixte     : bool  — GEX total contredit regime mais local confirme (informatif, pas une alerte)
     """
+    _LOCAL_BAND = 0.02  # ±2% du spot pour le GEX local
+
     gex_intensity = abs(total_gex)
+
+    # GEX local : somme des strikes dans la bande ±2% autour du spot
+    if gex_by_strike and spot > 0:
+        gex_local = sum(
+            v for k, v in gex_by_strike.items()
+            if abs(k - spot) / spot <= _LOCAL_BAND
+        )
+    else:
+        gex_local = total_gex  # fallback si pas de données par strike
 
     if flip is None or spot <= 0:
         # Fallback : signe GEX total
@@ -650,6 +665,7 @@ def classify_regime_spot_flip(
             "regime_source": "gex_estime",
             "gex_intensity": gex_intensity,
             "gex_flip_incoherent": False,
+            "structure_mixte": False,
         }
 
     dist_pct = abs(spot - flip) / spot
@@ -660,20 +676,28 @@ def classify_regime_spot_flip(
     else:
         regime_meca = "AMPLIFICATEUR"
 
-    # Check de coherence : signe GEX doit confirmer le regime mecanique
-    # STABILISANT -> GEX devrait etre positif
-    # AMPLIFICATEUR -> GEX devrait etre negatif
+    # Check de coherence base sur le GEX LOCAL (±2% spot) — pas le GEX total
+    # Vraie incohérence : le GEX autour du spot contredit le regime mecanique
+    # Structure mixte : GEX total diverge mais local confirme (ex: call-heavy loin du spot, puts locaux)
     incoherent = False
-    if regime_meca == "STABILISANT" and total_gex < -GEX_NEUTRAL_THRESHOLD:
-        incoherent = True
-    elif regime_meca == "AMPLIFICATEUR" and total_gex > GEX_NEUTRAL_THRESHOLD:
-        incoherent = True
+    structure_mixte = False
+    if regime_meca == "STABILISANT":
+        if gex_local < -GEX_NEUTRAL_THRESHOLD:
+            incoherent = True
+        elif total_gex < -GEX_NEUTRAL_THRESHOLD:
+            structure_mixte = True  # local coherent, total diverge = structure non-uniforme
+    elif regime_meca == "AMPLIFICATEUR":
+        if gex_local > GEX_NEUTRAL_THRESHOLD:
+            incoherent = True
+        elif total_gex > GEX_NEUTRAL_THRESHOLD:
+            structure_mixte = True  # local coherent, total diverge = appels éloignés dominant le total
 
     return {
         "regime_meca": regime_meca,
         "regime_source": "flip",
         "gex_intensity": gex_intensity,
         "gex_flip_incoherent": incoherent,
+        "structure_mixte": structure_mixte,
     }
 
 

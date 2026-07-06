@@ -40,7 +40,9 @@ export async function loadArbiterQuick(signal) {
     // Fiabilité réduite si stale OU flip incohérent (vient du dashboard, fallback sur dec)
     // On expose aussi gex_flip_incoherent dans /api/decision si possible, sinon on skip
     const flipIncoherent = !!(dec.gex_flip_incoherent);
-    const reliabilityReduced = dataStale || flipIncoherent || confPct < 20;
+    const structureMixte = !!(dec.structure_mixte);
+    // structure_mixte est informatif seulement — ne réduit pas la fiabilité
+    const reliabilityReduced = dataStale || (flipIncoherent && !structureMixte) || confPct < 20;
 
     const vc   = _VERDICT_CFG[verdict]  || _VERDICT_CFG['OBSERVE'];
     const urg  = _URGENCY_CFG[urgency]  || _URGENCY_CFG['NEUTRE'];
