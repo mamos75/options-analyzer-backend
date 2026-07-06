@@ -71,6 +71,89 @@ class NarrativeResolved:
     directional_bias: Optional[DirectionalBias] = None
     # Point 8 — Risk Matrix (remplace "Aucun risque immédiat identifié")
     risk_matrix: Optional[dict] = None
+    # F8.4 — Echelle des niveaux (ladders)
+    upside_ladder: list = field(default_factory=list)   # [{price, types, oi, dist_pct, tag}]
+    downside_ladder: list = field(default_factory=list)
+
+
+
+def _build_ladders(spot: float, flip: float | None, mp_strike: float, walls, max_pain_dte: int) -> tuple:
+    """F8.4 — Construit les echelles upside/downside de niveaux options.
+
+    Chaque entree : {price, types, oi, dist_pct, tag}
+    - upside_ladder : niveaux au-dessus du spot (croissant, plus proche en tete)
+    - downside_ladder : niveaux en-dessous du spot (decroissant, plus proche en tete)
+    """
+    candidates: dict[int, dict] = {}  # price_rounded -> entry
+
+    def _add(price: float, typ: str, oi: float | None = None, tag: str = "WALL"):
+        if not price or price <= 0:
+            return
+        key = round(price / 100) * 100  # round to nearest 100
+        if key not in candidates:
+            candidates[key] = {"price": float(key), "types": [], "oi": oi, "tag": tag}
+        if typ not in candidates[key]["types"]:
+            candidates[key]["types"].append(typ)
+        if oi and (candidates[key]["oi"] is None or oi > candidates[key]["oi"]):
+            candidates[key]["oi"] = oi
+
+    # Add flip
+    if flip is not None and flip > 0:
+        _add(flip, "FLIP", tag="FLIP")
+
+    # Add max_pain if relevant DTE
+    if mp_strike > 0 and max_pain_dte <= 7:
+        _add(mp_strike, "MAX_PAIN", tag="MAX_PAIN")
+
+    # Add walls (prefer non-DORMANT)
+    if walls and hasattr(walls, 'walls'):
+        active_walls = [w for w in walls.walls if getattr(w, 'activity_tag', None) != 'DORMANT']
+        if not active_walls:
+            active_walls = list(walls.walls)[:8]  # fallback
+        for w in active_walls[:10]:
+            strike = getattr(w, 'strike', None)
+            oi = getattr(w, 'oi', None)
+            if strike:
+                _add(float(strike), "WALL", oi=float(oi) if oi else None)
+    else:
+        # Fallback: major_call_wall / major_put_wall
+        if hasattr(walls, 'major_call_wall') and walls.major_call_wall:
+            _add(float(walls.major_call_wall), "WALL")
+        if hasattr(walls, 'major_put_wall') and walls.major_put_wall:
+            _add(float(walls.major_put_wall), "WALL")
+
+    # Deduplicate: merge entries within 0.5% of each other
+    merged: list[dict] = []
+    sorted_cands = sorted(candidates.values(), key=lambda x: x["price"])
+    for cand in sorted_cands:
+        if merged and abs(cand["price"] - merged[-1]["price"]) / spot < 0.005:
+            # Merge into last
+            last = merged[-1]
+            for t in cand["types"]:
+                if t not in last["types"]:
+                    last["types"].append(t)
+            if cand["oi"] and (last["oi"] is None or cand["oi"] > last["oi"]):
+                last["oi"] = cand["oi"]
+        else:
+            merged.append(dict(cand))
+
+    # Split into upside/downside and compute dist_pct
+    upside = []
+    downside = []
+    for entry in merged:
+        p = entry["price"]
+        dist_pct = (p - spot) / spot * 100
+        entry["dist_pct"] = round(dist_pct, 2)
+        if p > spot * 1.002:
+            upside.append(entry)
+        elif p < spot * 0.998:
+            downside.append(entry)
+
+    # Sort: upside ascending (nearest first), downside descending (nearest first)
+    upside.sort(key=lambda x: x["price"])
+    downside.sort(key=lambda x: x["price"], reverse=True)
+
+    return upside[:5], downside[:5]
 
 
 def _compute_risk_matrix(
@@ -362,7 +445,13 @@ def resolve_narrative(
     # ── Range mode ────────────────────────────────────────────────────────
     range_mode = gex.regime == "STABILISANT"
     mp_strike = max_pain_display["strike"]
-    near_max_pain = abs(spot - mp_strike) / spot < 0.04
+    near_max_pain = abs(spot - mp_strike) / spot < 0.04  # old: range scenario trigger
+    # F8.5 — PIN priority: spot colle au max_pain (<=0.5%) ET expiry aujourd'hui/demain
+    pin_active = (
+        mp_strike > 0
+        and abs(spot - mp_strike) / spot < 0.005
+        and max_pain_display.get('dte', 99) <= 1
+    )
 
     # ── Asymétrie du risque ───────────────────────────────────────────────
     flip = gex.flip_level
@@ -422,7 +511,15 @@ def resolve_narrative(
     gex_label, gex_context, gex_use_in_signal = _build_gex_activity(audit, gex)
 
     # ── Scénario principal ────────────────────────────────────────────────
-    if range_mode and near_max_pain:
+    # F8.5 — PIN prioritaire : spot collé au max_pain (≤0.5%) ET expiry J0/J1
+    if pin_active:
+        _pin_dist = abs(spot - mp_strike) / spot * 100
+        scenario = (
+            f"PIN d'expiration actif — Spot collé au Max Pain ${mp_strike:,.0f} "
+            f"(écart {_pin_dist:.1f}%) — Mouvement directionnel improbable avant le fixing "
+            f"({max_pain_display.get('expiry', '?')}, J-{max_pain_display.get('dte', 0)})"
+        )
+    elif range_mode and near_max_pain:
         scenario = (
             f"Range compressé — BTC attiré vers ${mp_strike:,.0f} "
             f"({max_pain_display['expiry']}, J-{max_pain_display['dte']})"
@@ -471,6 +568,10 @@ def resolve_narrative(
         flip_use_in_signal=flip_use_in_signal_val,
     )
 
+    # ── F8.4 — Ladders (upside / downside levels) ─────────────────────────
+    _mp_dte = max_pain_display.get('dte', 99) if max_pain_display else 99
+    upside_ladder, downside_ladder = _build_ladders(spot, flip, mp_strike, walls, _mp_dte)
+
     # ── Invalidation ──────────────────────────────────────────────────────
     if flip is not None and flip_use_in_signal_val:
         invalidation = flip
@@ -492,6 +593,13 @@ def resolve_narrative(
         range_mode, asymmetric_side, mp_strike, flip, spot,
         flip_use_in_signal=flip_use_in_signal_val,
     )
+    # F8.5 — PIN override : si pin actif, la synthèse principale = message pin
+    if pin_active:
+        _pin_dist = abs(spot - mp_strike) / spot * 100
+        phrase_synthese = (
+            f"Spot collé au Max Pain ${mp_strike:,.0f} (écart {_pin_dist:.1f}%) — "
+            f"pin d'expiration en cours. Mouvement directionnel improbable avant le fixing."
+        )
     if gex_use_in_signal and calibration_status != "available":
         phrase_synthese = _apply_gex_confidence_wording(phrase_synthese, calibration_status)
 
@@ -572,6 +680,8 @@ def resolve_narrative(
         flip_top_contributors=flip_audit.top_contributors if flip_audit else [],
         directional_bias=db,
         risk_matrix=risk_matrix,
+        upside_ladder=upside_ladder,
+        downside_ladder=downside_ladder,
     )
 
 
