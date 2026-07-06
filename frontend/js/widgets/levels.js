@@ -1,4 +1,5 @@
 // js/widgets/levels.js — F3: type réel, tags PIN/ATM, pas de rôle hardcodé
+// F9.6 — Garantit ≥1 mur au-dessus ET ≥1 mur en-dessous du spot dans le top-N affiché
 import { apiFetch } from '../api.js';
 import { esc, fmtPrice, tagBadge } from '../lib/fmt.js';
 
@@ -33,6 +34,46 @@ function wallRole(w, price) {
     : { label: type.replace('_', ' '), cls: 'resistance', tag: null, tooltip: null };
 }
 
+// F9.6 — Sélectionne top-N murs en garantissant ≥1 au-dessus ET ≥1 en-dessous du spot.
+// Algorithme :
+//   1. Sépare les murs en deux groupes : above_spot et below_spot (par strike vs price)
+//   2. Trie chaque groupe par total_oi décroissant (plus gros mur en premier)
+//   3. Prend le meilleur above + meilleur below (slots garantis)
+//   4. Remplit les slots restants (N-2) avec les prochains murs par OI, tous côtés confondus
+//   5. Re-trie le résultat final par strike décroissant pour l'affichage (résistances en haut)
+function selectTopWallsBalanced(allWalls, price, N) {
+  if (!allWalls || allWalls.length === 0) return [];
+
+  // Sépare above (résistances) et below (supports) par position du strike vs spot
+  // AT_MONEY est inclus dans below pour éviter un slot vide côté support
+  const above = allWalls.filter(w => w.strike > price).slice().sort((a, b) => (b.total_oi || 0) - (a.total_oi || 0));
+  const below  = allWalls.filter(w => w.strike <= price).slice().sort((a, b) => (b.total_oi || 0) - (a.total_oi || 0));
+
+  const selected = new Set();
+  const result = [];
+
+  // Slots garantis : meilleur above + meilleur below (si ils existent)
+  if (above.length > 0) { result.push(above[0]); selected.add(above[0].strike + '|' + above[0].type); }
+  if (below.length > 0) { result.push(below[0]); selected.add(below[0].strike + '|' + below[0].type); }
+
+  // Slots restants : parcours les murs par OI décroissant (tous côtés), sans doublon
+  const remaining = allWalls
+    .slice()
+    .sort((a, b) => (b.total_oi || 0) - (a.total_oi || 0));
+
+  for (const w of remaining) {
+    if (result.length >= N) break;
+    const key = w.strike + '|' + w.type;
+    if (!selected.has(key)) {
+      result.push(w);
+      selected.add(key);
+    }
+  }
+
+  // Re-tri par strike décroissant : résistances (plus haut strike) en premier
+  return result.sort((a, b) => b.strike - a.strike);
+}
+
 export async function loadLevels(signal) {
   const el = document.getElementById('m2-content');
   try {
@@ -41,8 +82,14 @@ export async function loadLevels(signal) {
 
     const price = walls.btc_price || 0;
     const allWalls = (walls.walls || []).slice().sort((a, b) => a.strike - b.strike);
-    const supports    = allWalls.filter(w => w.side === 'SUPPORT' || w.side === 'AT_MONEY' || (!w.side && w.strike < price)).slice(-3).reverse();
-    const resistances = allWalls.filter(w => (w.side === 'RESISTANCE' || (!w.side && w.strike > price)) && w.side !== 'SUPPORT').slice(0, 3);
+
+    // F9.6 — sélection garantissant ≥1 above + ≥1 below spot (au lieu de slice brut)
+    const TOP_N = 6;
+    const topWalls = selectTopWallsBalanced(allWalls, price, TOP_N);
+
+    // Sépare pour l'affichage (résistances en haut, supports en bas)
+    const resistances = topWalls.filter(w => w.strike > price);
+    const supports    = topWalls.filter(w => w.strike <= price);
 
     const wallCard = (w) => {
       const role = wallRole(w, price);
