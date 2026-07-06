@@ -1460,6 +1460,7 @@ async def get_decision():
         "vexcex_urgency": decision.vexcex_urgency,
         "vexcex_label": decision.vexcex_label,
         "vexcex_contribution": decision.vexcex_contribution,
+        "gex_flip_incoherent": gex.gex_flip_incoherent,
     }
 
 

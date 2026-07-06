@@ -17,6 +17,7 @@ import { loadVolWeather } from './widgets/vol_weather.js';
 import { loadGexDex } from './widgets/gex_dex.js';
 import { loadMopiVsBtc } from './widgets/mopi_btc.js';
 import { loadRegimeSummary } from './widgets/regime.js';
+import { loadArbiterQuick } from './widgets/arbiter_quick.js';
 import { loadVexCex, drawVcCharts } from './widgets/vex_cex.js';
 
 let _nextRefreshAt = 0;
@@ -50,7 +51,11 @@ export async function loadAllData() {
   await loadBtcPrice();
   if (seq !== getLoadSeq()) return;
 
-  // Load regime summary first (top card)
+  // Load F5 quick block first (top of page)
+  await loadArbiterQuick(signal);
+  if (seq !== getLoadSeq()) return;
+
+  // Load regime summary
   await loadRegimeSummary(signal);
   if (seq !== getLoadSeq()) return;
 
