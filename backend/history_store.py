@@ -332,3 +332,17 @@ def get_vex_cex_history(days: int = 7) -> List[Dict]:
             (cutoff,),
         ).fetchall()
     return [{"ts": r[0], "vex": r[1] or 0.0, "cex": r[2] or 0.0} for r in rows]
+
+
+def get_flip_history(hours: int = 6) -> list:
+    """F8.6 — Historique du flip_level sur les N dernières heures.
+    Retourne les N derniers enregistrements (plus recent en premier).
+    """
+    cutoff = int(time.time()) - hours * 3600
+    with _conn() as c:
+        rows = c.execute(
+            "SELECT ts, flip_level FROM metrics_history "
+            "WHERE ts >= ? AND flip_level IS NOT NULL ORDER BY ts DESC",
+            (cutoff,),
+        ).fetchall()
+    return [{"ts": r["ts"], "flip_level": r["flip_level"]} for r in rows]
