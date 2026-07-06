@@ -1618,10 +1618,21 @@ def _build_interpretation(
             f"{edge_u}."
         )
 
-    # Signaux contradictoires ou proches de 50
+    # Signaux contradictoires ou proches de 50 — F14.3 texte différencié
+    diff = abs(u - b)
+    if diff <= 5:
+        return (
+            f"Équilibre 24h ({u:.0f}% haussier vs {b:.0f}% baissier — écart {diff:.0f} pts). "
+            "Pas de pression directionnelle dominante. Attends une confirmation avant d'agir."
+        )
+    if u > b:
+        return (
+            f"Biais haussier modéré 24h ({u:.0f}% vs {b:.0f}%). "
+            "Signal en émergence — attends confluence GEX + DEX pour confirmer."
+        )
     return (
-        f"Signaux mixtes — Baisse 24h : {b:.0f}% vs Hausse 24h : {u:.0f}%. "
-        "Pas de pression directionnelle dominante. Attends une confirmation."
+        f"Biais baissier modéré 24h ({b:.0f}% vs {u:.0f}%). "
+        "Signal en émergence — attends confluence GEX + DEX pour confirmer."
     )
 
 

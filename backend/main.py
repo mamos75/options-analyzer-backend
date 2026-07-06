@@ -1432,6 +1432,11 @@ async def get_decision():
         # F8.8 — contexte DEX pour raison ignorée explicite
         "dex_activity_context": narrative.dex_activity_context,
         "dex_activity_label": narrative.dex_activity_label,
+        # F14.4 — Ladders pour trigger nommé (arbiter phrase)
+        "upside_ladder": narrative.upside_ladder,
+        "downside_ladder": narrative.downside_ladder,
+        "niveau_haut": narrative.niveau_haut,
+        "niveau_bas": narrative.niveau_bas,
     }
 
     try:

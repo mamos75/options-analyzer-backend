@@ -460,7 +460,18 @@ def compute_decision(
             phrase = f"Signal haussier convergent ({names})."
         else:
             phrase = f"Signal haussier ({names})."
-        if niveau_haut:
+        # F14.4 — trigger nommé avec OI du mur upside
+        upside_ladder = narrative_data.get("upside_ladder") or []
+        _trigger = upside_ladder[0] if upside_ladder else None
+        if _trigger:
+            _price = _trigger.get("price") or niveau_haut
+            _oi = _trigger.get("oi")
+            _oi_str = f" (mur {_oi:,.0f} BTC)" if _oi else ""
+            if _price:
+                phrase += f" Attendre cassure de ${_price:,.0f}{_oi_str} confirmée."
+            else:
+                phrase += " Attendre cassure du premier niveau upside confirmée."
+        elif niveau_haut:
             phrase += f" Attendre cassure de ${niveau_haut:,.0f} confirmée."
         else:
             phrase += " Attendre cassure du premier niveau upside confirmée."
@@ -474,7 +485,18 @@ def compute_decision(
             phrase = f"Signal baissier convergent ({names})."
         else:
             phrase = f"Signal baissier ({names})."
-        if niveau_bas:
+        # F14.4 — trigger nommé avec OI du mur downside
+        downside_ladder = narrative_data.get("downside_ladder") or []
+        _trigger_dn = downside_ladder[0] if downside_ladder else None
+        if _trigger_dn:
+            _price_dn = _trigger_dn.get("price") or niveau_bas
+            _oi_dn = _trigger_dn.get("oi")
+            _oi_str_dn = f" (mur {_oi_dn:,.0f} BTC)" if _oi_dn else ""
+            if _price_dn:
+                phrase += f" Attendre cassure de ${_price_dn:,.0f}{_oi_str_dn} confirmée."
+            else:
+                phrase += " Attendre cassure du premier niveau downside confirmée."
+        elif niveau_bas:
             phrase += f" Attendre cassure de ${niveau_bas:,.0f} confirmée."
         else:
             phrase += " Attendre cassure du premier niveau downside confirmée."

@@ -85,6 +85,14 @@ def _compute_monthly_wr(episode_rows: list, direction: str) -> dict:
     return monthly
 
 
+def _worst_month(monthly_wr: dict):
+    """Retourne le pire mois (WR le plus bas) parmi monthly_wr."""
+    if not monthly_wr:
+        return None
+    worst = min(monthly_wr.items(), key=lambda x: x[1]["wr"])
+    return {"month": worst[0], "wr": worst[1]["wr"], "n": worst[1]["n"]}
+
+
 def _compute_bucket_episodes(
     conn: sqlite3.Connection,
     threshold: float,
@@ -122,7 +130,7 @@ def _compute_bucket_episodes(
             "n": 0, "n_episodes": 0, "n_heures": n_heures,
             "wr": None, "wilson_lb": None,
             "has_edge": False, "threshold": threshold, "direction": direction,
-            "monthly_wr": {},
+            "monthly_wr": {}, "worst_month": None,
         }
 
     if direction == "UP":
@@ -148,11 +156,12 @@ def _compute_bucket_episodes(
         "threshold": threshold,
         "direction": direction,
         "monthly_wr": monthly_wr,
+        "worst_month": _worst_month(monthly_wr),
     }
 
 
 def _compute_baseline(conn: sqlite3.Connection) -> dict:
-    """Calcule le WR baseline (hausse à +24h sur tous les snapshots)."""
+    """Calcule le WR baseline séparé UP et DOWN (F14.1)."""
     rows = conn.execute("""
         SELECT h.btc_price,
                (SELECT btc_price FROM metrics_history
@@ -164,9 +173,13 @@ def _compute_baseline(conn: sqlite3.Connection) -> dict:
     valid = [r for r in rows if r["future_price"] is not None]
     n = len(valid)
     if n == 0:
-        return {"wr": 0.5, "n": 0}
-    wr = sum(1 for r in valid if r["future_price"] > r["btc_price"]) / n
-    return {"wr": round(wr, 3), "n": n}
+        return {"up": {"wr": 0.5, "n": 0}, "down": {"wr": 0.5, "n": 0}}
+    up_wins   = sum(1 for r in valid if r["future_price"] > r["btc_price"])
+    down_wins = sum(1 for r in valid if r["future_price"] < r["btc_price"])
+    return {
+        "up":   {"wr": round(up_wins / n, 3),   "n": n},
+        "down": {"wr": round(down_wins / n, 3), "n": n},
+    }
 
 
 def compute_mopi_validation(
@@ -174,16 +187,16 @@ def compute_mopi_validation(
     low_threshold: float = 30.0,
 ) -> dict:
     """
-    Retourne le rapport de validation MOPI par épisodes (F13).
+    Retourne le rapport de validation MOPI par épisodes (F13/F14).
 
     Structure :
     {
       "generated_at": int,
       "n_snapshots_total": int,
-      "baseline": {"wr": float, "n": int},
+      "baseline": {"up": {"wr": float, "n": int}, "down": {"wr": float, "n": int}},
       "thresholds": {"high": 70, "low": 30},
       "results": {
-        "high_4h":  {n, n_episodes, n_heures, wr, wilson_lb, has_edge, monthly_wr},
+        "high_4h":  {n, n_episodes, n_heures, wr, wilson_lb, has_edge, monthly_wr, worst_month},
         "high_24h": {...},
         "low_4h":   {...},
         "low_24h":  {...},
@@ -202,16 +215,17 @@ def compute_mopi_validation(
             "SELECT COUNT(*) FROM metrics_history WHERE mopi IS NOT NULL"
         ).fetchone()[0]
 
-        # Baseline 24h
+        # Baseline 24h — F14.1 : baseline up/down séparés
         baseline = _compute_baseline(conn)
-        baseline_wr = baseline["wr"]
+        baseline_up_wr   = baseline["up"]["wr"]
+        baseline_down_wr = baseline["down"]["wr"]
 
         # Validation buckets par épisodes
         results = {
-            "high_4h":  _compute_bucket_episodes(conn, high_threshold, "UP",   _HORIZON_4H_MIN,  _HORIZON_4H_MAX,  baseline_wr),
-            "high_24h": _compute_bucket_episodes(conn, high_threshold, "UP",   _HORIZON_24H_MIN, _HORIZON_24H_MAX, baseline_wr),
-            "low_4h":   _compute_bucket_episodes(conn, low_threshold,  "DOWN", _HORIZON_4H_MIN,  _HORIZON_4H_MAX,  baseline_wr),
-            "low_24h":  _compute_bucket_episodes(conn, low_threshold,  "DOWN", _HORIZON_24H_MIN, _HORIZON_24H_MAX, baseline_wr),
+            "high_4h":  _compute_bucket_episodes(conn, high_threshold, "UP",   _HORIZON_4H_MIN,  _HORIZON_4H_MAX,  baseline_up_wr),
+            "high_24h": _compute_bucket_episodes(conn, high_threshold, "UP",   _HORIZON_24H_MIN, _HORIZON_24H_MAX, baseline_up_wr),
+            "low_4h":   _compute_bucket_episodes(conn, low_threshold,  "DOWN", _HORIZON_4H_MIN,  _HORIZON_4H_MAX,  baseline_down_wr),
+            "low_24h":  _compute_bucket_episodes(conn, low_threshold,  "DOWN", _HORIZON_24H_MIN, _HORIZON_24H_MAX, baseline_down_wr),
         }
 
         # Verdict global
@@ -233,12 +247,15 @@ def compute_mopi_validation(
             recommended_horizon = "none"
             signal_status = "pas_d_edge"
 
-        # preliminary = True tant que n_episodes < 30 pour les deux directions
-        max_ep = max(
-            results["high_24h"].get("n_episodes", 0),
-            results["low_24h"].get("n_episodes", 0),
-        )
-        preliminary = max_ep < 30
+        # F14.2 — preliminary élargi : n < 30 OU wilson_lb <= baseline correspondante
+        def _bucket_is_validated(bucket: dict, bline_wr: float) -> bool:
+            n_ep = bucket.get("n_episodes", 0)
+            lb   = bucket.get("wilson_lb")
+            return n_ep >= 30 and lb is not None and lb > bline_wr
+
+        h24_ok = _bucket_is_validated(results["high_24h"], baseline_up_wr)
+        l24_ok = _bucket_is_validated(results["low_24h"],  baseline_down_wr)
+        preliminary = not (h24_ok and l24_ok)
 
         return {
             "generated_at": int(time.time()),

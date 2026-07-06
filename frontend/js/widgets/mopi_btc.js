@@ -82,7 +82,10 @@ async function _loadMopiTrackRecord() {
     const status = verdict.signal_status || '';
     const preliminary = verdict.preliminary === true;
     const baseline = v.baseline || {};
-    const baselineWr = baseline.wr != null ? (baseline.wr * 100).toFixed(1) : null;
+    // F14.1 — baseline est maintenant {up: {wr, n}, down: {wr, n}}
+    const baselineUpWr   = (baseline.up   && baseline.up.wr   != null) ? (baseline.up.wr   * 100).toFixed(1) : null;
+    const baselineDownWr = (baseline.down && baseline.down.wr != null) ? (baseline.down.wr * 100).toFixed(1) : null;
+    const baselineWr = baselineUpWr; // rétrocompat pour affichage global
 
     // Badge couleur et libellé
     let statusColor, statusLabel;
@@ -110,20 +113,28 @@ async function _loadMopiTrackRecord() {
       const lb = b.wilson_lb !== null ? (b.wilson_lb * 100).toFixed(1) + '%' : '-';
       const wr = b.wr !== null ? (b.wr * 100).toFixed(1) + '%' : '-';
       const edge = b.has_edge ? ' \u2713' : '';
+      // F14.1 — utiliser baseline directionnel selon UP/DOWN
+      const bline = dirLabel === 'UP' ? baselineUpWr : baselineDownWr;
       let liftStr = '';
-      if (baselineWr !== null && b.wr !== null) {
-        const liftPts = (b.wr * 100 - parseFloat(baselineWr)).toFixed(1);
-        liftStr = ' vs baseline ' + baselineWr + '% \u2192 ' + (liftPts > 0 ? '+' : '') + liftPts + ' pts';
+      if (bline !== null && b.wr !== null) {
+        const liftPts = (b.wr * 100 - parseFloat(bline)).toFixed(1);
+        liftStr = ' vs baseline ' + bline + '% \u2192 ' + (liftPts > 0 ? '+' : '') + liftPts + ' pts';
       }
-      return dirLabel + ' WR ' + wr + liftStr + ' (LB ' + lb + ', ' + ep + ' \u00e9pisodes/' + heures + 'h)' + edge;
+      // F14.2 — pire mois
+      let worstStr = '';
+      if (b.worst_month) {
+        const wm = b.worst_month;
+        worstStr = ' \u00b7 pire mois ' + wm.month + ' WR ' + (wm.wr * 100).toFixed(0) + '% (n=' + wm.n + ')';
+      }
+      return dirLabel + ' WR ' + wr + liftStr + ' (LB ' + lb + ', ' + ep + ' \u00e9pisodes/' + heures + 'h)' + edge + worstStr;
     }
 
     const prelimNote = preliminary
       ? '<div style="margin-top:5px;padding:4px 7px;background:#f9731622;border-radius:4px;color:#f97316;font-size:10px">n &lt; 30 \u00e9pisodes \u2014 \u00e9chantillons chevauchants, recalcul en cours</div>'
       : '';
 
-    const baselineNote = baselineWr !== null
-      ? '<span>Baseline 24h : ' + baselineWr + '% (n=' + (baseline.n || '?') + ')</span>'
+    const baselineNote = (baselineUpWr !== null || baselineDownWr !== null)
+      ? '<span>Baseline 24h — UP : ' + (baselineUpWr || '?') + '% · DOWN : ' + (baselineDownWr || '?') + '% (n=' + ((baseline.up && baseline.up.n) || (baseline.n) || '?') + ')</span>'
       : '';
 
     el.innerHTML =

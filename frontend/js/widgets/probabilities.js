@@ -2,8 +2,7 @@
 import { apiFetch } from '../api.js';
 import { esc } from '../lib/fmt.js';
 
-// Seuil en-deçà duquel les deux scores sont trop proches pour un biais exploitable
-const EQUILIBRE_DELTA = 5;
+// F14.3 — EQUILIBRE_DELTA supprimé : on lit horizon_verdict_* depuis le backend
 
 export async function loadProbabilities(signal) {
   const el = document.getElementById('m3-content');
@@ -65,7 +64,10 @@ export async function loadProbabilities(signal) {
       const bull = h.bull ?? 0;
       const bear = h.bear ?? 0;
       const delta = Math.abs(bull - bear);
-      const equilibre = delta <= EQUILIBRE_DELTA;  // F8.2 — frontière incluse
+      // F14.3 — verdict depuis le backend (source unique)
+      const verdictKey = hi === 0 ? 'horizon_verdict_24h' : 'horizon_verdict_72h';
+      const horizonVerdict = data[verdictKey] || 'EQUILIBRE';
+      const equilibre = (horizonVerdict === 'EQUILIBRE');
 
       if (equilibre) {
         // Scores trop proches — pas de biais exploitable
@@ -140,8 +142,9 @@ export async function loadProbabilities(signal) {
       horizons.forEach((h, hi) => {
         const bull = h.bull ?? 0;
         const bear = h.bear ?? 0;
-        const delta = Math.abs(bull - bear);
-        const equilibre = delta <= EQUILIBRE_DELTA;  // F8.2 — frontière incluse
+        // F14.3 — verdict depuis le backend (source unique)
+        const vKey = hi === 0 ? 'horizon_verdict_24h' : 'horizon_verdict_72h';
+        const equilibre = (data[vKey] || 'EQUILIBRE') === 'EQUILIBRE';
         const domScore = equilibre ? Math.max(bull, bear) : (bull >= bear ? bull : bear);
         const bar = document.getElementById(`pb-${hi}-dom`);
         if (bar) bar.style.width = Math.min(domScore, 100) + '%';
