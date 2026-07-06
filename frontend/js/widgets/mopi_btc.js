@@ -18,7 +18,8 @@ export async function loadMopiVsBtc(signal) {
     const lastMopi = mopi[mopi.length - 1];
     const corr = data.correlations?.corr_now?.toFixed(2) ?? '\u2014';
     const mopiColor = lastMopi > CFG.MOPI_HIGH ? 'var(--green)' : lastMopi < CFG.MOPI_LOW ? 'var(--red)' : 'var(--yellow)';
-    const mopiLabel = lastMopi > CFG.MOPI_HIGH ? 'Surach\u00e9t\u00e9 / Signal Long' : lastMopi < CFG.MOPI_LOW ? 'Survendu / Signal Short' : 'Zone neutre';
+    // F9.4 — labels corrects : pas de 'Suracheté' si signal est Long
+    const mopiLabel = lastMopi > CFG.MOPI_HIGH ? 'Signal Long — MOPI haussier' : lastMopi < CFG.MOPI_LOW ? 'Signal Short — MOPI baissier' : 'Zone neutre';
 
     el.innerHTML = `
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
