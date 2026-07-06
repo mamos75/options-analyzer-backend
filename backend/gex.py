@@ -676,21 +676,35 @@ def classify_regime_spot_flip(
     else:
         regime_meca = "AMPLIFICATEUR"
 
-    # Check de coherence base sur le GEX LOCAL (±2% spot) — pas le GEX total
-    # Vraie incohérence : le GEX autour du spot contredit le regime mecanique
-    # Structure mixte : GEX total diverge mais local confirme (ex: call-heavy loin du spot, puts locaux)
+    # F8.1 — Check de cohérence basé sur le GEX LOCAL (±2% spot) — pas le GEX total
+    # STABILISANT : spot > flip → dealers long gamma → calls locaux = cohérent
+    # AMPLIFICATEUR : spot < flip → dealers short gamma → puts locaux = cohérent
+    # Vraie incohérence = le GEX local CONTREDIT le régime mécanique
+    # Structure mixte = local confirme, total diverge (calls éloignés dominant le total)
     incoherent = False
     structure_mixte = False
     if regime_meca == "STABILISANT":
         if gex_local < -GEX_NEUTRAL_THRESHOLD:
+            # local négatif (puts dominent près du spot) → contredit STABILISANT
             incoherent = True
         elif total_gex < -GEX_NEUTRAL_THRESHOLD:
-            structure_mixte = True  # local coherent, total diverge = structure non-uniforme
+            # local positif (cohérent), total négatif → structure non-uniforme
+            structure_mixte = True
     elif regime_meca == "AMPLIFICATEUR":
-        if gex_local > GEX_NEUTRAL_THRESHOLD:
+        # Vraie incohérence : AMPLIFICATEUR mais dealers sont long gamma LOCALEMENT
+        # gex_local > 0 ET significatif → puts ne dominent pas → amplification contestée
+        # Structure mixte : gex_local ET total tous deux positifs → call-heavy partout
+        # = book réel call-heavy, spot juste sous flip (ex: fixture 07/07 62662/65000)
+        if gex_local < -GEX_NEUTRAL_THRESHOLD:
+            # local négatif (puts dominent près du spot) → cohérent avec AMPLIFICATEUR
+            incoherent = False
+        elif gex_local > GEX_NEUTRAL_THRESHOLD and total_gex < -GEX_NEUTRAL_THRESHOLD:
+            # local positif MAIS total négatif → contradiction locale/globale = vraie incohérence
             incoherent = True
         elif total_gex > GEX_NEUTRAL_THRESHOLD:
-            structure_mixte = True  # local coherent, total diverge = appels éloignés dominant le total
+            # total positif (call-heavy global) + spot sous flip = structure mixte
+            structure_mixte = True
+        # sinon : gex_local neutre ou petite magnitude → pas de signal fort, incoherent=False
 
     return {
         "regime_meca": regime_meca,
