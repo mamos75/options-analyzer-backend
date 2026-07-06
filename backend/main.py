@@ -726,7 +726,7 @@ async def get_snapshot():
         from .gex_activity_audit import compute_gex_activity_audit, compute_flip_activity_audit
         from .gravity_activity_audit import compute_gravity_activity_audit
         _audit  = compute_gex_activity_audit(snapshot)
-        _flip   = compute_flip_activity_audit(snapshot, gex)
+        _flip   = compute_flip_activity_audit(snapshot, gex.flip_level)  # bugfix: was gex (GEXProfile), must be gex.flip_level (float)
         _gaudit = compute_gravity_activity_audit(snapshot, gex)
         gmap_lv = compute_gravity_map(snapshot, gex)
         dex_lv  = compute_dex_levels(snapshot)
@@ -1448,11 +1448,20 @@ async def get_decision():
         vexcex_label=_vexcex_regime_dec.label,
     )
 
-    # F8.6 — Calcul flip_zone (stabilité du gamma flip sur 6h)
+    # F8.6 + F9.2 — flip_zone : stabilité du gamma flip sur 6h avec rejet outliers (>5% médiane)
     try:
         flip_history = history_store.get_flip_history(hours=6)
-        flip_vals = [r["flip_level"] for r in flip_history if r.get("flip_level")]
+        flip_vals_raw = [r["flip_level"] for r in flip_history if r.get("flip_level")]
         _spot = snapshot.btc_price or 1
+        n_raw = len(flip_vals_raw)
+        # F9.2 — Rejeter les points à >5% de la médiane brute
+        _rejected = []
+        flip_vals = flip_vals_raw
+        if n_raw >= 3:
+            _sorted_raw = sorted(flip_vals_raw)
+            _median_raw = _sorted_raw[n_raw // 2]
+            flip_vals = [v for v in flip_vals_raw if abs(v - _median_raw) / _median_raw <= 0.05]
+            _rejected = [v for v in flip_vals_raw if abs(v - _median_raw) / _median_raw > 0.05]
         n = len(flip_vals)
         if n >= 3:
             median_flip = sorted(flip_vals)[n // 2]
@@ -1464,17 +1473,19 @@ async def get_decision():
             flip_moving = is_monotone and abs(last3[0] - last3[2]) / _spot > 0.005
             flip_zone = {
                 "n": n,
+                "n_raw": n_raw,
                 "display": flip_display,
                 "min": flip_min,
                 "max": flip_max,
                 "amplitude_pct": round(amplitude_pct, 2),
                 "stable": amplitude_pct < 1.0,
                 "moving": flip_moving,
+                "outliers_rejected": _rejected,  # F9.2 debug
             }
         else:
-            flip_zone = {"n": n, "stable": True, "display": gex.flip_level}
+            flip_zone = {"n": n, "n_raw": n_raw, "stable": True, "display": gex.flip_level, "outliers_rejected": _rejected}
     except Exception:
-        flip_zone = {"n": 0, "stable": True, "display": gex.flip_level}
+        flip_zone = {"n": 0, "stable": True, "display": gex.flip_level, "outliers_rejected": []}
 
     return {
         "verdict": decision.verdict,
