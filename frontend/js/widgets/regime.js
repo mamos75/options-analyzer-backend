@@ -40,7 +40,7 @@ const _SYSTEM_COLOR = {
   'OFFLINE':   '#475569',
 };
 
-export function buildLevelsContext(btcSpot, lvlFlip, lvlHaut, lvlBas, mpStrike, mpDte, mpExpiry, flipDistPct, vexBull, cexBull) {
+export function buildLevelsContext(btcSpot, lvlFlip, lvlHaut, lvlBas, mpStrike, mpDte, mpExpiry, flipDistPct, vexBull, cexBull, lvlHautLbl, lvlBasLbl) {
   const fmtP = v => v ? '$' + Math.round(v).toLocaleString() : null;
   const lines = [];
   const THRESH = CFG.LEVELS_NEAR_THRESH;
@@ -356,7 +356,8 @@ export async function loadRegimeSummary(signal) {
           btcSpot, lvlFlip, lvlHaut, lvlBas,
           mpStrike, mpDte, mpExpiry,
           vcData.gamma_flip_dist_pct,
-          vexBull, cexBull
+          vexBull, cexBull,
+          lvlHautLbl, lvlBasLbl
         );
         return ctx
           ? `<div style="font-size:12px;color:#c9d1e0;line-height:1.85;margin-bottom:14px;padding:14px 16px;background:rgba(255,255,255,0.03);border-radius:10px;border-left:3px solid #475569">${ctx}</div>`
