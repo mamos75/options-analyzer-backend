@@ -326,8 +326,9 @@ export async function loadRegimeSummary(signal) {
         <span class="regime-top-urgency" style="color:${urgencyColor};border-color:${urgencyColor}55;background:${urgencyColor}11">
           ${esc(urgency)}
         </span>
+        <!-- F9.1 — state (situation) à la place de system_status -->
         <span class="regime-top-urgency" style="color:${sysColor};border-color:${sysColor}55;background:${sysColor}11">
-          ${esc(sysStatus)}
+          ${esc(decisionData?.state || sysStatus)}
         </span>
       </div>
 
@@ -397,16 +398,26 @@ export async function loadRegimeSummary(signal) {
         <div class="regime-signals">${ignoredRows}</div>
       </div>` : ''}
 
-      <div style="margin-top:14px;padding:10px 14px;background:${verdictColor}0d;border:1.5px solid ${verdictColor}44;border-radius:10px;display:flex;align-items:center;justify-content:space-between;gap:12px">
-        <div>
-          <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:${verdictColor};margin-bottom:3px">Décision Arbiter</div>
-          <div style="font-size:15px;font-weight:900;color:${verdictColor}">${esc(verdict)}</div>
-        </div>
-        <div style="text-align:right">
-          <div style="font-size:20px;font-weight:900;color:${verdictColor}">${confPct}%</div>
-          <div style="font-size:10px;color:#64748b">confiance</div>
-        </div>
-      </div>
+      <!-- F9.1 — Décision Arbiter : action FR + confiance -->
+      ${(() => {
+        const _dec_action = decisionData?.action || 'OBSERVER';
+        const _dec_state  = decisionData?.state  || 'RAS';
+        const _afr = {'AGIR_LONG':'▲ AGIR LONG','AGIR_SHORT':'▼ AGIR SHORT','PRÉPARER':'◎ PRÉPARER','OBSERVER':'◌ OBSERVER'};
+        const _aColor = {'AGIR_LONG':'#22c55e','AGIR_SHORT':'#ef4444','PRÉPARER':'#f59e0b','OBSERVER':'#64748b'};
+        const _aLbl = _afr[_dec_action] || _dec_action;
+        const _aCl  = _aColor[_dec_action] || verdictColor;
+        return `<div style="margin-top:14px;padding:10px 14px;background:${_aCl}0d;border:1.5px solid ${_aCl}44;border-radius:10px;display:flex;align-items:center;justify-content:space-between;gap:12px">
+          <div>
+            <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:${_aCl};margin-bottom:3px">Décision Arbiter</div>
+            <div style="font-size:15px;font-weight:900;color:${_aCl}">${esc(_aLbl)}</div>
+            <div style="font-size:10px;color:#64748b;margin-top:2px">${esc(_dec_state)}</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:20px;font-weight:900;color:${_aCl}">${confPct}%</div>
+            <div style="font-size:10px;color:#64748b">confiance</div>
+          </div>
+        </div>`;
+      })()}
     `;
   } catch (e) {
     if (el) el.innerHTML = `<div class="error-state"><div class="error-icon">⚠</div>Régime indisponible : ${esc(e.message)}</div>`;

@@ -13,6 +13,14 @@ const _VERDICT_CFG = {
   'NO_TRADE':    { icon: '⊘', label: 'NO TRADE',  color: '#64748b', bg: '#64748b0d', border: '#64748b33' },
 };
 
+// F9.1 — Action en français (affiché dans le bloc "Quoi faire")
+const _ACTION_FR = {
+  'AGIR_LONG':  { icon: '▲', label: 'AGIR LONG',  color: '#22c55e' },
+  'AGIR_SHORT': { icon: '▼', label: 'AGIR SHORT', color: '#ef4444' },
+  'PRÉPARER':   { icon: '◎', label: 'PRÉPARER',   color: '#f59e0b' },
+  'OBSERVER':   { icon: '◌', label: 'OBSERVER',   color: '#64748b' },
+};
+
 const _URGENCY_CFG = {
   'CRITIQUE': { color: '#ef4444', label: 'zone critique' },
   'ÉLEVÉE':   { color: '#f59e0b', label: 'zone de pression' },
@@ -144,7 +152,8 @@ export async function loadArbiterQuick(signal) {
         <!-- QUOI FAIRE -->
         <div style="padding:10px 14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:10px${triggerLevel ? '' : ';grid-column:1/-1'}">
           <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin-bottom:4px">Quoi faire</div>
-          <div style="font-size:11px;font-weight:700;color:${vc.color};margin-bottom:4px">${esc(verdict)}</div>
+          <!-- F9.1 — action FR au lieu du verdict EN -->
+          <div style="font-size:11px;font-weight:700;color:${(_ACTION_FR[action]||_ACTION_FR['OBSERVER']).color};margin-bottom:4px">${(_ACTION_FR[action]||_ACTION_FR['OBSERVER']).icon} ${(_ACTION_FR[action]||_ACTION_FR['OBSERVER']).label}</div>
           <div style="font-size:11px;color:#c9d1e0;line-height:1.55">${esc(actionPhrase)}</div>
         </div>
 
