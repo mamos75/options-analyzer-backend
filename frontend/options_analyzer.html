@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Mamos Options — BTC Analysis</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -34,7 +34,16 @@
     min-height: 100vh;
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
+    overscroll-behavior-y: none;
+    -webkit-text-size-adjust: 100%;
   }
+
+  * {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+
+  input, textarea, select { touch-action: auto; }
 
   /* ─── ANIMATIONS ─── */
   @keyframes pulse {
@@ -68,6 +77,7 @@
     display: flex; align-items: center; justify-content: center;
     z-index: 1000;
     animation: fadeIn 0.4s ease;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
   }
   .overlay-screen.hidden { display: none; }
 
@@ -228,7 +238,10 @@
     -webkit-backdrop-filter: blur(20px);
     border-bottom: 1px solid var(--border);
     padding: 0 24px;
-    height: 64px;
+    padding-top: env(safe-area-inset-top);
+    padding-left: max(24px, env(safe-area-inset-left));
+    padding-right: max(24px, env(safe-area-inset-right));
+    height: calc(64px + env(safe-area-inset-top));
     display: flex; align-items: center; justify-content: space-between;
     gap: 16px;
   }
@@ -292,6 +305,10 @@
     border-radius: 16px;
     padding: 24px;
     transition: border-color 0.2s;
+    overflow: hidden;
+    min-width: 0;
+    word-break: break-word;
+    overflow-wrap: break-word;
   }
   .card:hover { border-color: var(--border-hover); }
 
@@ -320,7 +337,7 @@
   .regime-top-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
   .regime-top-urgency { font-size:10px; font-weight:700; letter-spacing:1.2px;
     text-transform:uppercase; padding:3px 10px; border-radius:20px; border:1px solid; }
-  .regime-signals-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:14px; }
+  .regime-signals-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:14px; min-width:0; }
   .regime-signal-mini { background:rgba(255,255,255,.03); border:1px solid var(--border);
     border-radius:10px; padding:10px 12px; }
   .regime-signal-mini-name { font-size:9px; font-weight:700; text-transform:uppercase;
@@ -435,6 +452,7 @@
     grid-template-columns: 1fr 1fr;
     gap: 20px;
   }
+  .dual-grid > * { min-width: 0; }
 
   /* ─── MODULE 5: NARRATIVE ─── */
   .narrative-phrase {
@@ -514,16 +532,80 @@
 
   /* ─── RESPONSIVE ─── */
   @media (max-width: 768px) {
-    .header-logo { font-size: 12px; letter-spacing: 1px; }
+    .header {
+      height: calc(58px + env(safe-area-inset-top));
+      padding: env(safe-area-inset-top) 16px 0;
+      padding-left: max(16px, env(safe-area-inset-left));
+      padding-right: max(16px, env(safe-area-inset-right));
+    }
+    .header-logo { font-size: 11px; letter-spacing: 1px; }
     .header-price { font-size: 18px; }
     .countdown { display: none; }
-    .main { padding: 16px 12px 48px; gap: 14px; }
-    .card { padding: 16px; }
+    .main {
+      padding-top: 16px;
+      padding-bottom: max(48px, calc(24px + env(safe-area-inset-bottom)));
+      padding-left: max(12px, env(safe-area-inset-left));
+      padding-right: max(12px, env(safe-area-inset-right));
+      gap: 14px;
+    }
+    .card { padding: 16px; border-radius: 14px; overflow: hidden; }
     .levels-grid { grid-template-columns: 1fr; }
+    .levels-grid-2 { grid-template-columns: 1fr 1fr; }
     .dual-grid { grid-template-columns: 1fr; }
     .context-grid { grid-template-columns: 1fr 1fr; }
-    .level-price { font-size: 22px; }
-    .auth-box { padding: 32px 24px; }
+    .level-price { font-size: 20px; }
+    .auth-box { padding: 32px 20px; }
+    .vex-cex-grid { grid-template-columns: 1fr; }
+    .gex-dex-grid { grid-template-columns: 1fr; }
+    .regime-signals { grid-template-columns: 1fr 1fr; }
+    .regime-signals-grid { grid-template-columns: repeat(3, 1fr); }
+    .vol-value { font-size: 22px; }
+    .vex-cex-value { font-size: 18px; }
+    .gamma-flip-price { font-size: 17px; }
+    .regime-block { padding: 14px; }
+    .narrative-phrase { font-size: 15px; }
+    .regime-signal-mini-val { font-size: 13px; }
+  }
+
+  @media (max-width: 480px) {
+    .header {
+      height: calc(52px + env(safe-area-inset-top));
+      padding: env(safe-area-inset-top) 12px 0;
+      padding-left: max(12px, env(safe-area-inset-left));
+      padding-right: max(12px, env(safe-area-inset-right));
+    }
+    .header-logo { font-size: 10px; letter-spacing: .8px; }
+    .header-price { font-size: 15px; }
+    .btn-logout { display: none; }
+    .context-grid { grid-template-columns: 1fr; }
+    .levels-grid-2 { grid-template-columns: 1fr 1fr; }
+    .regime-signals { grid-template-columns: 1fr; }
+    .regime-signals-grid { grid-template-columns: 1fr 1fr; }
+    .level-price { font-size: 17px; letter-spacing: -.5px; }
+    .level-price-sm { font-size: 12px; }
+    .vol-value { font-size: 20px; }
+    .vol-icon { font-size: 28px; }
+    .card-label { font-size: 9px; gap: 6px; letter-spacing: 1px; }
+    .main { gap: 12px; }
+    .auth-box { padding: 28px 16px; border-radius: 16px; }
+    .auth-logo-mark { width: 52px; height: 52px; font-size: 22px; }
+    .auth-title { font-size: 20px; }
+    .auth-subtitle { font-size: 12px; }
+    .context-pill-value { font-size: 16px; }
+    .narrative-phrase { font-size: 14px; }
+    .levels-meta { gap: 8px; }
+    .levels-meta-item { padding: 8px 10px; font-size: 11px; }
+    .regime-block { padding: 12px; }
+    .regime-badge { padding: 4px 10px; font-size: 10px; }
+    .regime-plain { font-size: 12px; }
+    .live-indicator span { display: none; }
+    .regime-signal-mini { padding: 8px 10px; }
+    .regime-signal-mini-val { font-size: 12px; }
+    .regime-top-badge { font-size: 11px; padding: 6px 12px; }
+    .gex-dex-value { font-size: 14px; }
+    .prob-label { font-size: 12px; }
+    .prob-pct { font-size: 14px; }
+    .vol-term-grid { grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); }
   }
 
 
@@ -661,12 +743,7 @@
     font-size: 11px; font-weight: 700;
   }
 
-  @media (max-width: 480px) {
-    .header { padding: 0 12px; height: 56px; }
-    .header-price { font-size: 15px; }
-    .btn-logout { display: none; }
-    .context-grid { grid-template-columns: 1fr; }
-  }
+  /* 480px breakpoint consolidated above */
 
   /* ─── PERIOD SELECTOR ─── */
   .period-selector { display:flex; gap:4px; margin-left:auto; }
