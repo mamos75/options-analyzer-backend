@@ -131,45 +131,60 @@ export async function initApp() {
   const { loadAllData, startRefreshLoop } = await import('./scheduler.js');
 
   try {
+    // Supabase callback redirects with query params (?mamos_session= or ?access_token=)
+    // Also support legacy hash fragment for backwards compat (#mamos_session= or #access_token=)
+    const qp = new URLSearchParams(window.location.search);
     const hash = window.location.hash;
 
-    if (hash.includes('mamos_session=')) {
-      const match = hash.match(/mamos_session=([^&]+)/);
-      if (match) {
-        const decoded = JSON.parse(atob(match[1]));
-        if (decoded && decoded.plan) {
+    const sessionParam = qp.get('mamos_session') || (hash.includes('mamos_session=') ? hash.match(/mamos_session=([^&]+)/)?.[1] : null);
+    const accessTokenParam = qp.get('access_token') || (hash.includes('access_token=') ? new URLSearchParams(hash.slice(1)).get('access_token') : null);
+    const patreonError = qp.get('patreon_error');
+
+    if (patreonError) {
+      // Surface the Patreon OAuth error to the user
+      const errEl = document.getElementById('login-error');
+      if (errEl) {
+        const msgs = {
+          'no_code':              'Autorisation Patreon annulée.',
+          'token_exchange_failed':'Erreur lors de l\'échange de token Patreon. Réessaie.',
+          'no_membership':        'Aucun abonnement Mamos Elite actif trouvé sur Patreon.',
+          'no_plan':              'Plan non reconnu. Vérifie ton abonnement Patreon.',
+        };
+        errEl.textContent = msgs[patreonError] || 'Erreur Patreon : ' + patreonError;
+        errEl.classList.add('visible');
+      }
+      history.replaceState(null, '', window.location.pathname);
+
+    } else if (sessionParam) {
+      const decoded = JSON.parse(atob(sessionParam));
+      if (decoded && decoded.plan) {
+        localStorage.setItem('mamos_trading_session', JSON.stringify({
+          plan: decoded.plan,
+          email: decoded.email || '',
+          premium_active: true,
+          ts: decoded.ts || Date.now()
+        }));
+      }
+      history.replaceState(null, '', window.location.pathname);
+
+    } else if (accessTokenParam) {
+      // Decode JWT claims directly — no network call needed, plan/premium_active are in the token
+      try {
+        const payloadB64 = accessTokenParam.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+        const payload = JSON.parse(atob(payloadB64));
+        const meta = payload.user_metadata || {};
+        const plan = meta.plan ?? '';
+        const email = payload.email ?? meta.email ?? '';
+        if (plan) {
           localStorage.setItem('mamos_trading_session', JSON.stringify({
-            plan: decoded.plan,
-            email: decoded.email || '',
-            premium_active: true,
-            ts: decoded.ts || Date.now()
+            plan,
+            email,
+            premium_active: meta.premium_active === true,
+            ts: Date.now()
           }));
         }
-      }
-      history.replaceState(null, '', window.location.pathname + window.location.search);
-
-    } else if (hash.includes('access_token=')) {
-      const params = new URLSearchParams(hash.slice(1));
-      const accessToken = params.get('access_token');
-      if (accessToken) {
-        // Decode JWT claims directly — no network call needed, plan/premium_active are in the token
-        try {
-          const payloadB64 = accessToken.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
-          const payload = JSON.parse(atob(payloadB64));
-          const meta = payload.user_metadata || {};
-          const plan = meta.plan ?? '';
-          const email = payload.email ?? meta.email ?? '';
-          if (plan) {
-            localStorage.setItem('mamos_trading_session', JSON.stringify({
-              plan,
-              email,
-              premium_active: meta.premium_active === true,
-              ts: Date.now()
-            }));
-          }
-        } catch (_) {}
-      }
-      history.replaceState(null, '', window.location.pathname + window.location.search);
+      } catch (_) {}
+      history.replaceState(null, '', window.location.pathname);
     }
   } catch(e) {}
 
