@@ -3,12 +3,12 @@ Directional Bias Score — synthèse directionnelle des options BTC.
 
 Score -100 à +100 : positif = biais haussier, négatif = biais baissier.
 
-4 signaux pondérés :
-  1. MOPI           (poids 30) — sentiment global options
-  2. DEX Actionable (poids 35) — flux dealers exploitables maintenant
-  3. PCR Weighted   (poids 20) — Put/Call ratio contrarian
-  4. GEX Asymétrie  (poids 15) — asymétrie du risque GEX
+F15 — 3 signaux renormalisés à 100 % (MOPI retiré le 07/07/2026) :
+  1. DEX Actionable (poids 50) — flux dealers exploitables maintenant
+  2. PCR Weighted   (poids 28) — Put/Call ratio contrarian
+  3. GEX Asymétrie  (poids 22) — asymétrie du risque GEX
 
+DISCONTINUITÉ : scores non comparables avant/après le 07/07/2026.
 Cible probable + stop logique basés sur la mécanique options (pas une prédiction TA).
 Stop = niveau qui invalide MÉCANIQUEMENT le régime, pas un stop-loss trader.
 """
@@ -21,11 +21,11 @@ from typing import Optional
 # Cap DEX actionable calibré sur l'ordre de grandeur réel BTC options
 _DEX_ACTIONABLE_CAP_BTC = 50.0
 
-# Poids des signaux
-_W_MOPI = 30.0
-_W_DEX = 35.0
-_W_PCR = 20.0
-_W_GEX = 15.0
+# Poids des signaux — F15 renormalisés (3 sources, somme = 100)
+# Anciens poids : DEX=35, PCR=20, GEX=15 sur 70 → x(100/70)
+_W_DEX = 50.0   # 35/70 * 100 ≈ 50
+_W_PCR = 28.0   # 20/70 * 100 ≈ 28.6 → 28
+_W_GEX = 22.0   # 15/70 * 100 ≈ 21.4 → 22
 
 
 @dataclass
@@ -72,7 +72,6 @@ class DirectionalBias:
 
 
 def compute_directional_bias(
-    mopi_score: float,
     pc_ratio_weighted: float,
     gex_use_in_signal: bool,
     dex_use_in_signal: bool,
@@ -91,29 +90,7 @@ def compute_directional_bias(
 
     signals: list[DirectionalBiasSignal] = []
 
-    # ── 1. MOPI (poids 30, réduit si non extrême) ────────────────────────────
-    # Règle : MOPI extrême (< 30 ou > 70) = signal directionnel fort (poids plein).
-    # MOPI non extrême (30-70) = contexte seulement — ne pas forcer une conclusion.
-    mopi_is_extreme = mopi_score > 70 or mopi_score < 30
-    mopi_effective_weight = _W_MOPI if mopi_is_extreme else _W_MOPI * 0.25
-    mopi_norm = (mopi_score - 50.0) / 50.0   # -1 à +1
-    mopi_contrib = round(mopi_norm * mopi_effective_weight, 1)
-    mopi_dir = "BULL" if mopi_contrib > 1 else ("BEAR" if mopi_contrib < -1 else "NEUTRAL")
-    if mopi_score >= 75:
-        mopi_detail = f"MOPI {mopi_score:.0f}/100 — forte pression acheteurs options"
-    elif mopi_score >= 55:
-        mopi_detail = f"MOPI {mopi_score:.0f}/100 — légère avance acheteurs (contexte, non extrême)"
-    elif mopi_score >= 45:
-        mopi_detail = f"MOPI {mopi_score:.0f}/100 — forces équilibrées, contexte seulement"
-    elif mopi_score >= 25:
-        mopi_detail = f"MOPI {mopi_score:.0f}/100 — légère avance vendeurs (contexte, non extrême)"
-    else:
-        mopi_detail = f"MOPI {mopi_score:.0f}/100 — forte pression vendeurs options"
-    if not mopi_is_extreme:
-        mopi_detail += " — poids réduit (signal non extrême, attend confirmation)"
-    signals.append(DirectionalBiasSignal("MOPI", mopi_contrib, mopi_dir, True, mopi_detail))
-
-    # ── 2. DEX Actionable (poids 35, uniquement si dex_use_in_signal) ────────
+    # ── 1. DEX Actionable (poids 50, uniquement si dex_use_in_signal) ────────
     if dex_use_in_signal:
         dex_norm = max(-1.0, min(1.0, dex_actionable_btc / _DEX_ACTIONABLE_CAP_BTC))
         dex_contrib = round(dex_norm * _W_DEX, 1)
@@ -133,7 +110,7 @@ def compute_directional_bias(
         ))
         dex_contrib = 0.0
 
-    # ── 3. PCR Weighted contrarian (poids 20) ────────────────────────────────
+    # ── 2. PCR Weighted contrarian (poids 28) ────────────────────────────────
     pc = pc_ratio_weighted
     if pc >= 1.5:
         pcr_norm = min(1.0, (pc - 1.5) / 0.5 + 0.6)  # 0.6 à 1.0 au-dessus de 1.5
@@ -152,7 +129,7 @@ def compute_directional_bias(
         pcr_detail = f"PCR {pc:.2f} — équilibre put/call neutre"
     signals.append(DirectionalBiasSignal("PCR Weighted", pcr_contrib, pcr_dir, True, pcr_detail))
 
-    # ── 4. GEX Asymétrie (poids 15, uniquement si gex_use_in_signal) ─────────
+    # ── 3. GEX Asymétrie (poids 22, uniquement si gex_use_in_signal) ─────────
     if gex_use_in_signal and asymmetric_side in ("UP", "DOWN"):
         gex_contrib = _W_GEX if asymmetric_side == "UP" else -_W_GEX
         gex_contrib = round(gex_contrib, 1)
@@ -171,7 +148,7 @@ def compute_directional_bias(
     signals.append(DirectionalBiasSignal("GEX Asymétrie", gex_contrib, gex_dir, gex_use_in_signal, gex_detail))
 
     # ── Score final ───────────────────────────────────────────────────────────
-    raw_score = mopi_contrib + dex_contrib + pcr_contrib + gex_contrib
+    raw_score = dex_contrib + pcr_contrib + gex_contrib
     score = round(max(-100.0, min(100.0, raw_score)), 1)
 
     label, emoji = _classify_bias(score)
@@ -255,14 +232,13 @@ def _classify_bias(score: float) -> tuple[str, str]:
 
 
 def _build_confidence(convergent: int, total_active: int) -> tuple[str, int]:
+    # F15 — max 3 sources (MOPI retiré) : seuil Très haute à 3
     if total_active == 0:
         return "N/A (0 signal actif)", 0
-    if convergent >= 4:
+    if convergent >= 3:
         return f"Très haute ({convergent}/{total_active})", convergent
-    elif convergent == 3:
-        return f"Haute ({convergent}/{total_active})", convergent
     elif convergent == 2:
-        return f"Moyenne ({convergent}/{total_active})", convergent
+        return f"Haute ({convergent}/{total_active})", convergent
     elif convergent == 1:
         return f"Faible ({convergent}/{total_active})", convergent
     return f"Conflictuelle (0/{total_active})", 0

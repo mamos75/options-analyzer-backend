@@ -725,16 +725,6 @@
     letter-spacing: .3px;
   }
 
-  /* ─── MOPI vs BTC chart ─── */
-  .mopi-chart-wrap { position:relative; margin-top:8px; }
-  .mopi-chart-wrap canvas { width:100%; height:160px; display:block; }
-  .mopi-legend { display:flex; gap:16px; margin-top:8px; }
-  .mopi-legend-item { display:flex; align-items:center; gap:6px; font-size:11px; color:var(--muted); }
-  .mopi-legend-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
-  .mopi-stats-row { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-top:10px; }
-  .mopi-stat-box { background:rgba(255,255,255,.04); border:1px solid var(--border); border-radius:8px; padding:8px; text-align:center; }
-  .mopi-stat-lbl { font-size:9px; color:var(--muted); font-weight:600; letter-spacing:.05em; text-transform:uppercase; }
-  .mopi-stat-val { font-size:15px; font-weight:800; margin-top:2px; }
 .tag-badge {
   display: inline-block;
   font-size: 9px;
@@ -929,19 +919,6 @@
       </div>
     </div>
 
-    <!-- MODULE 9: MOPI vs BTC -->
-    <div class="card" id="m9-mopi">
-      <div class="card-label"><div class="card-label-dot" style="background:var(--green)"></div>MOPI vs BTC
-        <div class="period-selector">
-          <button class="period-btn active" onclick="setPeriod('7d')">7J</button>
-          <button class="period-btn" onclick="setPeriod('14d')">14J</button>
-          <button class="period-btn" onclick="setPeriod('30d')">30J</button>
-        </div>
-      </div>
-      <div id="m9-content">
-        <div class="skeleton" style="height:200px;border-radius:12px;"></div>
-      </div>
-    </div>
 
     <!-- MODULE 5: NARRATIVE IA -->
     <div class="card" id="m5-narrative">

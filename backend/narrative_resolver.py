@@ -237,21 +237,16 @@ def _compute_risk_matrix(
       faux_breakout    : faible/modéré/élevé
       rupture_regime   : dormant/actif + niveau
     """
-    mopi_score = mopi.score if mopi else 50.0
     gex_regime = gex.regime if gex else "NEUTRE"
     squeeze_prob = sq.probability_pct if sq else 0.0
     iv_r = getattr(mopi, "iv_rank", iv_rank) if mopi else iv_rank
 
     # ── Risque directionnel ─────────────────────────────────────────────────
     if gex_regime == "AMPLIFICATEUR":
-        if mopi_score < 40 and dp.direction == "BEARISH_FLOWS":
+        if dp.direction == "BEARISH_FLOWS":
             dir_niveau, dir_sens, dir_color = "élevé", "bearish", "red"
-        elif mopi_score > 60 and dp.direction == "BULLISH_FLOWS":
+        elif dp.direction == "BULLISH_FLOWS":
             dir_niveau, dir_sens, dir_color = "élevé", "bullish", "red"
-        elif mopi_score < 45 or dp.direction == "BEARISH_FLOWS":
-            dir_niveau, dir_sens, dir_color = "modéré", "bearish", "orange"
-        elif mopi_score > 55 or dp.direction == "BULLISH_FLOWS":
-            dir_niveau, dir_sens, dir_color = "modéré", "bullish", "orange"
         else:
             dir_niveau, dir_sens, dir_color = "modéré", "neutre (direction non confirmée)", "orange"
     elif gex_regime == "STABILISANT":
@@ -527,30 +522,7 @@ def resolve_narrative(
     # ── Vérification cohérence DEX ────────────────────────────────────────
     # Règle : DEX dormant/structurel = stock de delta, pas un flux exploitable.
     # Ne jamais transformer un stock dormant en signal directionnel ou contradiction.
-    summary_bullish = mopi.score >= 55
     dex_coherent = True
-    if dex_use_in_signal:
-        # DEX actif ou actionnable → peut signaler une vraie contradiction
-        if summary_bullish and dp.direction == "BEARISH_FLOWS":
-            dex_coherent = False
-            contradictions.append({
-                "widget": "DEX vs MOPI",
-                "detail": (
-                    f"MOPI {mopi.score:.0f}/100 (bullish) mais DEX = BEARISH_FLOWS "
-                    f"({dp.net_delta:+,.0f} BTC) — résistance dealer contredit le biais"
-                ),
-                "resolution": "DEX = risque conditionnel si BTC monte. Ce n'est pas un signal directionnel, c'est une résistance de hedging.",
-            })
-        elif not summary_bullish and dp.direction == "BULLISH_FLOWS":
-            dex_coherent = False
-            contradictions.append({
-                "widget": "DEX vs MOPI",
-                "detail": (
-                    f"MOPI {mopi.score:.0f}/100 (bearish) mais DEX = BULLISH_FLOWS "
-                    f"({dp.net_delta:+,.0f} BTC) — soutien dealer atténue la pression"
-                ),
-                "resolution": "DEX = soutien conditionnel. Peut limiter la baisse mais pas l'inverser seul.",
-            })
     # Si dex_use_in_signal=False : DEX structurel de fond, aucune contradiction émise.
 
     # ── Vérification cohérence Gravity ───────────────────────────────────
@@ -604,9 +576,9 @@ def resolve_narrative(
                     "peu d'activité récente. "
                     "Signal GEX à confirmer par volume et activité marché"
                 )
-        elif mopi.score < 45:
+        elif dp.direction == "BEARISH_FLOWS":
             scenario = "Régime amplificateur baissier — chaque move vers le bas sera amplifié"
-        elif mopi.score > 55:
+        elif dp.direction == "BULLISH_FLOWS":
             scenario = "Régime amplificateur haussier — breakout possible si résistances cèdent"
         else:
             scenario = "Régime amplificateur neutre — direction incertaine, mouvement violent imminent"
@@ -684,7 +656,6 @@ def resolve_narrative(
     # ── Directional Bias Score ───────────────────────────────────────────
     mp_near = gex.max_pain_profile.near if gex.max_pain_profile else None
     db = compute_directional_bias(
-        mopi_score=mopi.score,
         pc_ratio_weighted=mopi.pc_ratio_weighted,
         gex_use_in_signal=gex_use_in_signal,
         dex_use_in_signal=dex_use_in_signal,
@@ -1480,13 +1451,12 @@ def resolve_narrative_horizon(
 
 # ── Direction helpers ─────────────────────────────────────────────────────────
 
-def _dir_gex(gex: GEXProfile, mopi: MOPIScore, vetoed: bool) -> str:
+def _dir_gex(gex: GEXProfile, mopi: "MOPIScore", vetoed: bool) -> str:
     if vetoed or gex.regime == "STABILISANT":
         return "NEUTRE"
-    if mopi.score > 55:
-        return "HAUSSIER"
-    elif mopi.score < 45:
-        return "BAISSIER"
+    # Direction from GEX regime and flip level sign (no MOPI dependency)
+    if gex.regime == "AMPLIFICATEUR":
+        return "INCONNU"  # amplificateur sans biais directionnel propre
     return "NEUTRE"
 
 
@@ -1543,7 +1513,7 @@ def _dir_walls(walls: OptionsWallsProfile, spot: float, vetoed: bool) -> str:
 # ── Detail helpers ────────────────────────────────────────────────────────────
 
 def _det_gex(
-    gex: GEXProfile, mopi: MOPIScore, vetoed: bool,
+    gex: GEXProfile, mopi: "MOPIScore", vetoed: bool,
     audit: Optional[GEXActivityAudit],
     flip_use_in_signal: bool = True,
 ) -> str:
@@ -1555,8 +1525,7 @@ def _det_gex(
     flip_suffix = f" Flip ${flip:,.0f}" if flip is not None and flip_use_in_signal else ""
     if gex.regime == "STABILISANT":
         return f"Régime STABILISANT — dealers hedgent, BTC compressé.{flip_suffix}"
-    bias = "haussier" if mopi.score > 55 else ("baissier" if mopi.score < 45 else "neutre")
-    return f"Régime AMPLIFICATEUR {bias} — breakout amplifié.{flip_suffix}"
+    return f"Régime AMPLIFICATEUR — breakout amplifié.{flip_suffix}"
 
 
 def _det_dex(dp: DealerPressure, dex_levels: Optional[DEXLevels], vetoed: bool) -> str:
@@ -1660,7 +1629,7 @@ def _build_horizon_scenario(
 
     if horizon == "24h":
         if force_dominante == "GEX":
-            bias = "haussier" if mopi.score > 55 else ("baissier" if mopi.score < 45 else "neutre")
+            bias = "haussier" if dp.direction == "BULLISH_FLOWS" else ("baissier" if dp.direction == "BEARISH_FLOWS" else "neutre")
             if gex.regime == "STABILISANT":
                 return (
                     f"24h — GEX STABILISANT : BTC compressé, dealers hedgent des deux côtés. "

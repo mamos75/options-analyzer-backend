@@ -9,13 +9,6 @@ export const CFG = {
   EDGE_MIN_N:        30,
   EDGE_WILSON_FLOOR: 0.50,
   CONTRARIAN_MIN_N:  30,
-  // MOPI thresholds
-  MOPI_HIGH:         70,
-  MOPI_LOW:          30,
-  MOPI_OVERBOUGHT:   70,
-  MOPI_OVERSOLD:     30,
-  MOPI_COLOR_HIGH:   70,  // F9.4 — aligné sur seuil backend (>70 = signal)
-  MOPI_COLOR_LOW:    30,  // F9.4 — aligné sur seuil backend (<30 = signal)
   // GEX thresholds
   GEX_BIG_VEX:           20e6,
   GEX_BIG_CEX:           10e6,

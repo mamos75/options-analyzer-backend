@@ -10,8 +10,7 @@ export function setPeriod(p) {
     const txt = btn.textContent.toLowerCase().replace('j', 'd');
     btn.classList.toggle('active', txt === p);
   });
-  // Import and call sibling widget to avoid circular dep at top level
-  import('./mopi_btc.js').then(m => m.loadMopiVsBtc());
+  // F15.2 — mopi_btc.js supprimé, widget MOPI retiré
   loadGexDex();
 }
 
@@ -20,7 +19,7 @@ export async function loadGexDex(signal) {
   try {
     // Re-read currentPeriod from store at call time
     const { currentPeriod: period } = await import('../store.js');
-    const data = await apiFetch('/api/mopi_vs_btc?period=' + period, signal);
+    const data = await apiFetch('/api/gex_dex_history?period=' + period, signal);
     if (!data?.gex?.length) { el.innerHTML = '<div class="error-state"><div class="error-icon">\u26a0</div>Donn\u00e9es indisponibles</div>'; return; }
 
     const gexVals = data.gex.filter(v => v != null);

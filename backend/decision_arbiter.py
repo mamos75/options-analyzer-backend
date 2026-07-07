@@ -24,10 +24,7 @@ V5 — Fusion VEX/CEX Regime :
 
 from __future__ import annotations
 
-# ── MOPI seuils centralisés ───────────────────────────────────────────────────
-MOPI_SIGNAL_HIGH = 70   # score > MOPI_SIGNAL_HIGH → signal UP
-MOPI_SIGNAL_LOW  = 30   # score < MOPI_SIGNAL_LOW  → signal DOWN
-# Note : backtest.py utilise 65/35 — logique séparée, ne pas modifier ici.
+# F15 — MOPI retiré du moteur de décision (07/07/2026)
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -242,8 +239,6 @@ def compute_decision(
     narrative_data: dict,
     arena_data: Optional[dict] = None,
     health_data: Optional[dict] = None,
-    mopi_score: float = 50.0,
-    mopi_n_outcomes: int = 0,
     flip_use_in_signal: bool = True,
     gex_use_in_signal: bool = True,
     dex_use_in_signal: bool = True,
@@ -257,7 +252,6 @@ def compute_decision(
     Arbitrage final entre tous les signaux disponibles.
 
     Règles de dégradation :
-    - MOPI N < 30 → contexte seulement, ne contribue pas à la décision
     - Neural WR < 45% → ignoré (LAB ONLY)
     - flip_use_in_signal=False → aucune conclusion basée sur flip
     - Contradictions non résolues → cap confiance à 40%
@@ -337,28 +331,6 @@ def compute_decision(
             "name": "DEX",
             "reason": _dex_ctx or "DEX structurel ou dormant — pas de flux exploitable",
         })
-
-    # MOPI — F13 validation ÉPISODES (gap >6h) :
-    #   HIGH>70 : 17 épisodes, WR 68.8%, Wilson LB 0.482 → PAS d'edge vs baseline 49.0%
-    #   LOW<30  : 9 épisodes, WR 75.0%, Wilson LB 0.460 → PAS d'edge
-    #   Monthly instabilité : juillet 2026 WR=100% (5 épisodes) — artefact régime
-    #   → signal conservé comme indicateur directionnel, poids réduit à "faible"
-    if mopi_n_outcomes >= 30 and (mopi_score > MOPI_SIGNAL_HIGH or mopi_score < MOPI_SIGNAL_LOW):
-        direction = "UP" if mopi_score > MOPI_SIGNAL_HIGH else "DOWN"
-        signals_used.append({
-            "name": "MOPI",
-            "direction": direction,
-            "detail": f"MOPI {mopi_score:.0f}/100 — signal extrême horizon 24h (indicateur directionnel, N={mopi_n_outcomes})",
-            "weight": "faible",
-            "horizon": "24h",
-        })
-    else:
-        # Deux cas distincts pour ne pas mentir sur la raison réelle
-        if mopi_n_outcomes < 30:
-            reason = f"MOPI {mopi_score:.0f}/100 — historique insuffisant ({mopi_n_outcomes} snapshots < 30 requis)"
-        else:
-            reason = f"MOPI {mopi_score:.0f}/100 — dans la zone neutre (signal extrême requis : >{MOPI_SIGNAL_HIGH} ou <{MOPI_SIGNAL_LOW})"
-        signals_ignored.append({"name": "MOPI", "reason": reason})
 
     # Flip
     if not flip_use_in_signal:

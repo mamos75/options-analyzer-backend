@@ -66,7 +66,7 @@ _RULE_ID_PREFIXES: list = [
     ("max_pain_",        "max_pain"),
     ("put_wall_",        "walls"),
     ("call_wall_",       "walls"),
-    ("mopi_",            "mopi"),
+
     ("iv_",              "iv_rank"),
     ("pcr_near_",        "pcr"),
     ("puts_skew_",       "pcr"),
@@ -1117,7 +1117,6 @@ def _rules_bear_72h(
     call_wall: float,
     max_pain_strike: float,
     max_pain_dte: int,
-    mopi_score: float,
 ) -> tuple[list, list]:
     """Règles 72h BEAR — Max Pain + Walls + structure dominants."""
 
@@ -1145,24 +1144,6 @@ def _rules_bear_72h(
                 f"Put wall ${put_wall:,.0f} ({(spot-put_wall)/spot*100:.1f}% sous spot)"
                 if put_wall > 0 else "Put wall non identifié"
             ),
-        ),
-        _rule(
-            "mopi_bearish_72h",
-            "MOPI bearish global — pression options structurelle baissière",
-            "MOPI < 40 = consensus options baissier sur la structure",
-            weight=8,
-            triggered=(mopi_score < 40),
-            data_quality="high",
-            condition_detail=f"MOPI = {mopi_score:.0f}/100",
-        ),
-        _rule(
-            "gex_amplifier_bearish_72h",
-            "GEX amplificateur avec biais baissier sur 72h",
-            "GEX near négatif + MOPI bearish = amplification baissière structurelle",
-            weight=6,
-            triggered=(gex_near < 0 and mopi_score < 45),
-            data_quality="high",
-            condition_detail=f"GEX near {gex_near/1e6:.0f}M$ + MOPI {mopi_score:.0f}",
         ),
         _rule(
             "iv_high_structural_72h",
@@ -1202,16 +1183,6 @@ def _rules_bear_72h(
             ),
             pts_sign=-1,
         ),
-        _rule(
-            "mopi_bullish_72h",
-            "MOPI haussier global contredit le scénario baissier 72h",
-            "MOPI > 60 = sentiment options haussier → pression structurelle de fond haussière",
-            weight=8,
-            triggered=(mopi_score > 60),
-            data_quality="high",
-            condition_detail=f"MOPI = {mopi_score:.0f}/100",
-            pts_sign=-1,
-        ),
     ]
 
     return positives, penalties
@@ -1229,7 +1200,6 @@ def _rules_bull_72h(
     call_wall: float,
     max_pain_strike: float,
     max_pain_dte: int,
-    mopi_score: float,
     gex_regime: str = "NEUTRE",
     crash_regime: bool = False,
 ) -> tuple[list, list]:
@@ -1289,24 +1259,6 @@ def _rules_bull_72h(
             ),
         ),
         _rule(
-            "mopi_bullish_structural_72h",
-            "MOPI haussier global — pression options structurelle haussière",
-            "MOPI > 60 = sentiment options haussier sur la structure",
-            weight=8,
-            triggered=(mopi_score > 60),
-            data_quality="high",
-            condition_detail=f"MOPI = {mopi_score:.0f}/100",
-        ),
-        _rule(
-            "gex_stabilisant_72h",
-            "GEX stabilisant — dealers absorbent les baisses structurellement",
-            "GEX near positif + MOPI bullish = soutien structurel sur 72h",
-            weight=6,
-            triggered=(gex_near > 0 and mopi_score > 55),
-            data_quality="high",
-            condition_detail=f"GEX near {gex_near/1e6:.0f}M$ + MOPI {mopi_score:.0f}",
-        ),
-        _rule(
             "iv_calm_structural_72h",
             "IV structurellement basse — tendance haussière non contrariée",
             "IV rank < 30 = marché serein, tendance de fond haussière",
@@ -1343,26 +1295,6 @@ def _rules_bull_72h(
             condition_detail=f"Max Pain ${max_pain_strike:,.0f} (J-{max_pain_dte})",
             pts_sign=-1,
         ),
-        _rule(
-            "mopi_bearish_72h_penalty",
-            "MOPI baissier contredit le scénario haussier 72h",
-            "MOPI < 40 = pression options baissière structurelle",
-            weight=8,
-            triggered=(mopi_score < 40),
-            data_quality="high",
-            condition_detail=f"MOPI = {mopi_score:.0f}/100",
-            pts_sign=-1,
-        ),
-        _rule(
-            "gex_amplifier_bearish_72h_penalty",
-            "GEX amplificateur baissier contredit le scénario haussier",
-            "GEX négatif = pression amplificatrice défavorable au scénario haussier",
-            weight=6,
-            triggered=(gex_near < 0 and mopi_score < 45),
-            data_quality="high",
-            condition_detail=f"GEX near {gex_near/1e6:.0f}M$ + MOPI {mopi_score:.0f}",
-            pts_sign=-1,
-        ),
     ]
 
     return positives, penalties
@@ -1385,7 +1317,6 @@ def compute_probability_engine(
     call_wall: float,
     max_pain_strike: float,
     max_pain_dte: int,
-    mopi_score: float,
     gex_near_prev: Optional[float] = None,
     # Binance public — Étape 3
     funding_rate: Optional[float] = None,
@@ -1417,7 +1348,6 @@ def compute_probability_engine(
       call_wall         : strike call wall principal
       max_pain_strike   : strike max pain near-term
       max_pain_dte      : jours avant expiry max pain
-      mopi_score        : MOPI 0-100
       gex_near_prev     : gex_near snapshot précédent (None = unavailable)
       funding_rate      : funding rate Binance en % (None = unavailable)
       futures_oi        : futures open interest Binance en USD (None = unavailable)
@@ -1446,11 +1376,10 @@ def compute_probability_engine(
     _val_24h = _historical_validation_label(
         (module_accuracy_scores or {}).get("gex")
     )
-    # 72h : pire des modules principaux (max_pain et mopi)
-    _val_72h_mp   = _historical_validation_label((module_accuracy_scores or {}).get("max_pain"))
-    _val_72h_mopi = _historical_validation_label((module_accuracy_scores or {}).get("mopi"))
-    _val_order = {"en accumulation": 0, "forte": 3, "moyenne": 2, "faible": 1}
-    _val_72h = min((_val_72h_mp, _val_72h_mopi), key=lambda v: _val_order.get(v, 0))
+    # F15 — MOPI retiré : validation 72h = max_pain seul (dette PE self-validation future)
+    _val_72h_mp = _historical_validation_label((module_accuracy_scores or {}).get("max_pain"))
+    _val_order  = {"en accumulation": 0, "forte": 3, "moyenne": 2, "faible": 1}
+    _val_72h    = _val_72h_mp
 
     # ── 4h ───────────────────────────────────────────────────────────────────
     pos_b4, pen_b4 = _rules_bear_4h(
@@ -1488,12 +1417,12 @@ def compute_probability_engine(
     pos_b72, pen_b72 = _rules_bear_72h(
         gex_near, spot, flip_level, flip_use_in_signal,
         dex_direction, iv_rank, pc_ratio_near,
-        put_wall, call_wall, max_pain_strike, max_pain_dte, mopi_score,
+        put_wall, call_wall, max_pain_strike, max_pain_dte,
     )
     pos_u72, pen_u72 = _rules_bull_72h(
         gex_near, spot, flip_level, flip_use_in_signal,
         dex_direction, iv_rank, pc_ratio_near,
-        put_wall, call_wall, max_pain_strike, max_pain_dte, mopi_score,
+        put_wall, call_wall, max_pain_strike, max_pain_dte,
         gex_regime=gex_regime,
         crash_regime=crash_regime,
     )

@@ -450,12 +450,6 @@ def build_regime_engine_output(
     else:
         forces_vetoed.append(f"DEX exclu — stock delta inactif ({narrative.dex_activity_context})")
 
-    if mopi.score >= 60:
-        forces_actives.append(f"MOPI {mopi.score:.0f}/100 — pression options haussière")
-    elif mopi.score <= 40:
-        forces_actives.append(f"MOPI {mopi.score:.0f}/100 — pression options baissière")
-    else:
-        forces_actives.append(f"MOPI {mopi.score:.0f}/100 — sentiment options neutre")
 
     if narrative.flip_use_in_signal:
         flip = gex.flip_level

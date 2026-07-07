@@ -252,7 +252,6 @@ async def _history_saver():
                     call_wall=walls_h.major_call_wall or 0.0,
                     max_pain_strike=max_pain_strike_h,
                     max_pain_dte=max_pain_dte_h,
-                    mopi_score=mopi.score,
                     gex_near_prev=gex_near_prev_h,
                     funding_rate=bf_h.get("funding_rate"),
                     futures_oi=bf_h.get("futures_oi"),
@@ -443,7 +442,6 @@ async def _executive_logger():
                 vol_regime=_vol_regime,
                 panic=_panic,
                 dex_score=round((_dex_pressure + 100.0) / 2.0, 1),
-                mopi_score=mopi.score,
                 flip_distance_pct=_flip_dist,
                 max_pain_distance_pct=_mp_dist,
                 arena_leader=_arena_leader,
@@ -624,22 +622,14 @@ class DashboardResponse(BaseModel):
     regime_confidence: Optional[str] = None
     max_pain: float
     gamma_walls: list[float]
-    mopi_score: float
-    mopi_label: str
-    mopi_emoji: str
-    mopi_gex_component: float    # composante GEX dans le score MOPI (0-100)
-    mopi_pc_component: float     # composante Put/Call dans le score MOPI (0-100)
     iv_rank: float
     pc_ratio: float
-    mopi_squeeze_heuristic: float = 0.0  # B3: composant interne MOPI (heuristique)
-    squeeze_prob: float = 0.0          # DEPRECATED — alias compat pour frontend embarque
     weather_state: str
     weather_emoji: str
     weather_description: str
     weather_color: str = "#eab308"  # B6: couleur hex du regime meteo (frontend n'a plus de map locale)
     timestamp: float
     data_stale: bool = False  # True = Deribit rate-limited, données du dernier snapshot valide
-    mopi_delta_24h: Optional[float] = None
     max_pain_near: Optional[dict] = None          # near-term max pain structuré par expiry
     max_pain_institutional: Optional[dict] = None  # institutional max pain (highest OI expiry)
     max_pain_label: Optional[str] = None          # "Cible 06JUN (J-6) : $73,500" — affichage unifié
@@ -794,9 +784,6 @@ async def get_snapshot():
         bme_data = {"error": str(e)}
 
     # ── Dashboard payload ──────────────────────────────────────────────────────
-    hist_24h = history_store.get_history(1)
-    mopi_delta_24h = round(mopi.score - hist_24h[0]["mopi"], 1) if hist_24h else None
-
     dashboard_data = {
         "btc_price":             spot,
         "gex_total":             gex.total_gex,
@@ -804,17 +791,11 @@ async def get_snapshot():
         "gex_flip_incoherent":   gex.gex_flip_incoherent,
         "structure_mixte":        gex.structure_mixte,
         "flip_level":            gex.flip_level,
-        "mopi_score":            mopi.score,
-        "mopi_label":            mopi.label,
-        "mopi_emoji":            mopi.emoji,
         "iv_rank":               mopi.iv_rank,
-        "mopi_squeeze_heuristic": mopi.mopi_squeeze_heuristic,
-        "squeeze_prob":          mopi.squeeze_prob,  # DEPRECATED alias
         "weather_state":         weather.state,
         "weather_emoji":         weather.emoji,
         "weather_description":   weather.description,
         "weather_color":         weather.color,  # B6: couleur hex serveur
-        "mopi_delta_24h":        mopi_delta_24h,
         "timestamp":             snap_ts,
     }
 
@@ -876,9 +857,6 @@ async def get_dashboard():
     )
     weather = compute_weather(gex, mopi)
 
-    hist_24h = history_store.get_history(1)
-    mopi_delta_24h = round(mopi.score - hist_24h[0]['mopi'], 1) if hist_24h else None
-
     return DashboardResponse(
         btc_price=snapshot.btc_price,
         gex_total=gex.total_gex,
@@ -890,22 +868,14 @@ async def get_dashboard():
         regime_confidence=gex.regime_confidence,
         max_pain=gex.max_pain,
         gamma_walls=sorted(gex.gamma_walls),
-        mopi_score=mopi.score,
-        mopi_label=mopi.label,
-        mopi_emoji=mopi.emoji,
-        mopi_gex_component=mopi.gex_component,
-        mopi_pc_component=mopi.pc_ratio_component,
         iv_rank=mopi.iv_rank,
         pc_ratio=mopi.pc_ratio,
-        mopi_squeeze_heuristic=mopi.mopi_squeeze_heuristic,
-        squeeze_prob=mopi.squeeze_prob,  # DEPRECATED alias
         weather_state=weather.state,
         weather_emoji=weather.emoji,
         weather_description=weather.description,
         weather_color=weather.color,
         timestamp=snapshot.timestamp,
         data_stale=deribit.data_stale,
-        mopi_delta_24h=mopi_delta_24h,
         max_pain_near=_mp_dict(gex.max_pain_profile.near) if gex.max_pain_profile else None,
         max_pain_institutional=_mp_dict(gex.max_pain_profile.institutional) if gex.max_pain_profile else None,
         max_pain_label=(
@@ -1020,26 +990,6 @@ async def get_flip_audit():
         "timestamp": snapshot.timestamp,
     }
 
-
-@app.get("/api/mopi_free")
-async def get_mopi_free():
-    """Endpoint public — score MOPI seul (pas les détails VIP)."""
-    snapshot = await deribit.get_cached_snapshot()
-    gex = compute_gex(snapshot)
-    mopi = compute_mopi(
-        snapshot, gex, iv_history_cache,
-        gex_near_cap=_gex_calibration_cache["cap_value"],
-        cap_mode=_gex_calibration_cache["cap_mode"],
-        saturation_rate_7d=_gex_calibration_cache.get("saturation_rate_7d"),
-    )
-    weather = compute_weather(gex, mopi)
-    return {
-        "mopi_score": mopi.score,
-        "mopi_emoji": mopi.emoji,
-        "weather_emoji": weather.emoji,
-        "weather_state": weather.state,
-        "max_pain": gex.max_pain,
-    }
 
 
 @app.get("/api/max_pain_by_expiry")
@@ -1444,16 +1394,6 @@ async def get_decision():
     except Exception:
         arena_health = None
 
-    # F12.1 — mopi_n_outcomes depuis metrics_history (source réelle)
-    # L'ancienne source (model_arena._MDE_NAME outcomes) est vide → signal MOPI toujours ignoré
-    # On utilise le nombre de snapshots avec mopi > 70 ou < 30 sur les 30 derniers jours
-    try:
-        _mopi_rows = history_store.get_last_n_snapshots(1000)
-        _mopi_n_high = sum(1 for r in _mopi_rows if (r.get("mopi") or 0) > 70)
-        _mopi_n_low  = sum(1 for r in _mopi_rows if (r.get("mopi") or 0) < 30)
-        mopi_n_outcomes = max(_mopi_n_high, _mopi_n_low)
-    except Exception:
-        mopi_n_outcomes = 0
     # Conserver la lecture arena pour arena_status/confidence modifier
     if arena_health:
         lb = arena_health.get("leaderboard_detail", {})
@@ -1487,8 +1427,6 @@ async def get_decision():
         narrative_data=narrative_dict,
         arena_data=arena_health,
         health_data={"live_outcomes": arena_health.get("live_outcomes", 0)} if arena_health else None,
-        mopi_score=mopi.score,
-        mopi_n_outcomes=mopi_n_outcomes,
         flip_use_in_signal=narrative.flip_use_in_signal,
         gex_use_in_signal=narrative.gex_use_in_signal,
         dex_use_in_signal=narrative.dex_use_in_signal,
@@ -1800,7 +1738,6 @@ async def get_probability_engine():
         call_wall=walls.major_call_wall or 0.0,
         max_pain_strike=max_pain_strike,
         max_pain_dte=max_pain_dte,
-        mopi_score=mopi.score,
         gex_near_prev=gex_near_prev,
         funding_rate=bf.get("funding_rate"),
         futures_oi=bf.get("futures_oi"),
@@ -2378,7 +2315,7 @@ async def get_executive_summary():
             iv_rank=mopi.iv_rank, pc_ratio_near=mopi.pc_ratio_near,
             put_wall=_pe_walls.major_put_wall or 0.0, call_wall=_pe_walls.major_call_wall or 0.0,
             max_pain_strike=_mp_strike_ex, max_pain_dte=_mp_dte_ex,
-            mopi_score=mopi.score, gex_regime=gex.regime_meca,  # source unique
+            gex_regime=gex.regime_meca,  # source unique
             dex_score=(dp.pressure_pct + 100.0) / 2.0,
             module_accuracy_scores=_module_acc_ex if _module_acc_ex else None,
         )
@@ -2567,7 +2504,6 @@ async def snapshot_golden(label: str = "manual"):
                               if not callable(v)},
                 "walls_count": len(walls.walls) if walls else 0,
                 "flip_level": gex.flip_level,
-                "mopi_score": mopi.score,
             }
         }
     except Exception as e:
@@ -2603,16 +2539,6 @@ def list_snapshot_golden():
                 files.append({"file": fn})
     return {"files": files}
 
-
-@app.get("/api/mopi_validation")
-def get_mopi_validation(high: float = 70.0, low: float = 30.0):
-    """F12.3 — Self-validation MOPI : WR conditionnel sur données historiques réelles.
-
-    Retourne WR, Wilson LB (95% IC unilatéral), n pour les signaux >high / <low à +4h/+24h.
-    Utilise metrics_history (snapshot toutes les ~30min depuis mai 2026).
-    """
-    from .mopi_validation import compute_mopi_validation
-    return compute_mopi_validation(high_threshold=high, low_threshold=low)
 
 
 @app.get("/api/health_snapshot")
@@ -2756,18 +2682,16 @@ async def get_backtest(
     return run_backtest(days=days)
 
 
-@app.get("/api/mopi_vs_btc")
-async def get_mopi_vs_btc(
-    period:     str = Query("7d", pattern="^(7d|30d|90d)$"),
-    resolution: str = Query("1h", pattern="^(30m|1h|4h|1d)$"),
-):
-    """MOPI vs BTC — Validation du pouvoir prédictif historique.
 
-    Répond à UNE question : 'Le MOPI aide-t-il réellement à gagner de l'argent ?'
-    Source : options_history.db — données réelles accumulées.
-    """
-    from .mopi_vs_btc import compute_mopi_vs_btc
-    return compute_mopi_vs_btc(period=period, resolution=resolution)
+@app.get("/api/gex_dex_history")
+async def get_gex_dex_history(
+    period: str = "7d",
+    resolution: str = "1h",
+):
+    """GEX/DEX history — séries temporelles GEX[], DEX[], btc_price[].
+    Remplace /api/mopi_vs_btc comme source du widget GEX & DEX Évolution (F15.1)."""
+    from .gex_dex_history import compute_gex_dex_history
+    return compute_gex_dex_history(period=period, resolution=resolution)
 
 
 @app.get("/api/gex_activity_audit")
@@ -3207,17 +3131,6 @@ async def get_bme_enrich_stats():
     from .bme_binance_enrichment import get_stats
     return get_stats()
 
-
-@app.get("/api/mopi_divergence")
-async def get_mopi_divergence():
-    """MOPI Divergence Engine — état actuel de la divergence MOPI vs prix BTC.
-
-    Retourne : type bullish/bearish/none, force, fenêtre détectée,
-    probas 4h/24h/72h, raw_event_count vs unique_setup_count,
-    dernier signal détecté.
-    """
-    from .mopi_divergence_engine import get_current_mde_signal
-    return get_current_mde_signal()
 
 
 @app.get("/api/mde_vs_naive")

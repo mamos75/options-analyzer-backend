@@ -15,7 +15,7 @@ import { loadNarrative } from './widgets/narrative.js';
 import { loadModel } from './widgets/model.js';
 import { loadVolWeather } from './widgets/vol_weather.js';
 import { loadGexDex } from './widgets/gex_dex.js';
-import { loadMopiVsBtc } from './widgets/mopi_btc.js';
+
 import { loadRegimeSummary } from './widgets/regime.js';
 import { loadArbiterQuick } from './widgets/arbiter_quick.js';
 import { loadVexCex, drawVcCharts } from './widgets/vex_cex.js';
@@ -69,7 +69,7 @@ export async function loadAllData() {
     loadContext(signal),
     loadVolWeather(signal),
     loadGexDex(signal),
-    loadMopiVsBtc(signal),
+
     loadNarrative(signal),
     // loadModel removed F12 — model card hidden, background eval continues via /api/model_arena
     loadVexCex(signal),

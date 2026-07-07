@@ -16,7 +16,6 @@ export async function loadContext(signal) {
 
     const volState = dash.weather_state || dash.volatility_state || '\u2014';
     const dealerDir = dealer.direction || '\u2014';
-    const mopi = dash.mopi_score ?? dealer.mopi_score ?? null;
     const gex = dash.gex_regime || dealer.gex_regime || '\u2014';
 
     const volColors = {
@@ -33,13 +32,6 @@ export async function loadContext(signal) {
       dealerLabel = 'R\u00e9sistance'; dealerColor = 'var(--red)';
     } else if (dealerDir.includes('BULLISH') || dealerDir.includes('BULL')) {
       dealerLabel = 'Support'; dealerColor = 'var(--green)';
-    }
-
-    let mopiColor = 'var(--text)';
-    if (mopi !== null) {
-      if (mopi >= CFG.MOPI_COLOR_HIGH) mopiColor = 'var(--green)';
-      else if (mopi <= CFG.MOPI_COLOR_LOW) mopiColor = 'var(--red)';
-      else mopiColor = 'var(--yellow)';
     }
 
     // Mapping régime GEX unifié — source unique : gex.regime_meca (F1)
@@ -71,11 +63,6 @@ export async function loadContext(signal) {
           <div class="context-pill-label">Dealer</div>
           <div class="context-pill-value" style="color:${dealerColor}">${dealerLabel}</div>
           <div class="context-pill-sub">Flux dealers</div>
-        </div>
-        <div class="context-pill">
-          <div class="context-pill-label">MOPI</div>
-          <div class="context-pill-value" style="color:${mopiColor}">${mopi !== null ? Math.round(mopi) + '/100' : '\u2014'}</div>
-          <div class="context-pill-sub">Market Options Pressure</div>
         </div>
         <div class="context-pill">
           <div class="context-pill-label">GEX</div>
