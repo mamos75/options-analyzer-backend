@@ -11,11 +11,20 @@ Convention (v2, short-all) : dealers short TOUTES les options — meme hypothese
   => vex  = -vanna * OI * spot   (calls et puts : meme signe)
   => cex  = -charm * OI          (calls et puts : meme signe)
 
-  VEX > 0 : un choc de vol implicite (IV monte) force les dealers a acheter du BTC
-            (leur delta net monte -> ils achtent pour rester hedges).
-  VEX < 0 : un choc de vol implicite force les dealers a vendre du BTC.
-  CEX > 0 : le temps qui passe (theta) pousse les dealers a acheter du BTC.
-  CEX < 0 : le temps qui passe pousse les dealers a vendre du BTC.
+  TABLE DE VERITE (derive des formules BS — non negociable) :
+  Flux de re-hedging sur +dσ = d(delta_dealer)/dσ = -vanna_client.
+  Flux de re-hedging sur +dt = d(delta_dealer)/dt = -charm_client.
+
+  VEX > 0 : un choc de vol implicite (IV monte) force les dealers a VENDRE du BTC.
+            (Puts OTM dominent : delta_dealer monte sur +dσ → dealers vendent pour rester hedges.)
+            → VOL_SPIKE_RISK : pression baissière sur choc de volatilité.
+  VEX < 0 : un choc de vol implicite force les dealers a ACHETER du BTC.
+            (Calls OTM dominent : delta_dealer baisse sur +dσ → dealers achètent.)
+            → VOL_SPIKE_SUPPORT : carburant d'un squeeze haussier sur choc de vol.
+  CEX > 0 : le temps qui passe (theta) oblige les dealers a VENDRE du BTC.
+            → CHARM_SELL_PRESSURE : pression baissière passive dans le temps.
+  CEX < 0 : le temps qui passe pousse les dealers a ACHETER du BTC.
+            → CHARM_BUY_SUPPORT : support haussier passif dans le temps.
 
 Convention v1 (obsolete, CP-skew) : calls et puts de signes opposes —
   mesurait le desequilibre C/P pondere vanna, pas la vanna nette dealer.
@@ -141,23 +150,23 @@ def compute_vex_cex(snapshot: MarketSnapshot) -> VexCexProfile:
     top_vex = sorted(vex_map.items(), key=lambda x: abs(x[1]), reverse=True)[:5]
     top_cex = sorted(cex_map.items(), key=lambda x: abs(x[1]), reverse=True)[:5]
 
-    vex_dir = ("BULLISH_VANNA" if vex_total >  _VEX_NEUTRAL_THRESH else
-               "BEARISH_VANNA" if vex_total < -_VEX_NEUTRAL_THRESH else "NEUTRAL")
-    cex_dir = ("BULLISH_CHARM" if cex_total >  _CEX_NEUTRAL_THRESH else
-               "BEARISH_CHARM" if cex_total < -_CEX_NEUTRAL_THRESH else "NEUTRAL")
+    vex_dir = ("VOL_SPIKE_RISK"    if vex_total >  _VEX_NEUTRAL_THRESH else
+               "VOL_SPIKE_SUPPORT" if vex_total < -_VEX_NEUTRAL_THRESH else "NEUTRAL")
+    cex_dir = ("CHARM_SELL_PRESSURE" if cex_total >  _CEX_NEUTRAL_THRESH else
+               "CHARM_BUY_SUPPORT"   if cex_total < -_CEX_NEUTRAL_THRESH else "NEUTRAL")
 
     # Interpretations coherentes avec la convention short-all (v2)
     vex_interp = (
-        "VEX+ : un choc de vol implicite (IV hausse) force les dealers a acheter du BTC."
+        "VEX+ (VOL_SPIKE_RISK) : un choc de vol implicite force les dealers a VENDRE du BTC — pression baissiere."
         if vex_total > _VEX_NEUTRAL_THRESH else
-        "VEX- : un choc de vol implicite (IV hausse) force les dealers a vendre du BTC."
+        "VEX- (VOL_SPIKE_SUPPORT) : un choc de vol implicite force les dealers a ACHETER du BTC — carburant squeeze haussier."
         if vex_total < -_VEX_NEUTRAL_THRESH else
         "VEX neutre : la vanna n'exerce pas de pression directionnelle significative."
     )
     cex_interp = (
-        "CEX+ : le temps qui passe (theta) pousse les dealers a acheter du BTC."
+        "CEX+ (CHARM_SELL_PRESSURE) : l'ecoulement du temps oblige les dealers a VENDRE du BTC — pression baissiere passive."
         if cex_total > _CEX_NEUTRAL_THRESH else
-        "CEX- : le temps qui passe (theta) oblige les dealers a vendre du BTC."
+        "CEX- (CHARM_BUY_SUPPORT) : l'ecoulement du temps pousse les dealers a ACHETER du BTC — support haussier passif."
         if cex_total < -_CEX_NEUTRAL_THRESH else
         "CEX neutre : le charm decay n'exerce pas de pression directionnelle significative."
     )

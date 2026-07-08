@@ -497,7 +497,7 @@ def resolve_narrative(
         }
 
     # ── Range mode ────────────────────────────────────────────────────────
-    range_mode = gex.regime == "STABILISANT"
+    range_mode = gex.regime == "STABILISANT" and gex.regime_meca != "ZONE_DE_FLIP"
     mp_strike = max_pain_display["strike"]
     near_max_pain = abs(spot - mp_strike) / spot < 0.04  # old: range scenario trigger
     # F8.5 — PIN priority: spot colle au max_pain (<=0.5%) ET expiry aujourd'hui/demain
@@ -560,6 +560,19 @@ def resolve_narrative(
             f"Range compressé — Cible expiration ${mp_strike:,.0f} "
             f"({max_pain_display['expiry']}), spot ${spot:,.0f}"
         )
+    elif gex.regime_meca == "ZONE_DE_FLIP":
+        flip_val = gex.flip_level
+        if flip_val:
+            scenario = (
+                f"SUR la ligne de bascule (Gamma Flip ${flip_val:,.0f}) — "
+                "clôture au-dessus = régime stabilisant, en-dessous = amplificateur. "
+                "Pas de biais directionnel exploitable dans cet état."
+            )
+        else:
+            scenario = (
+                "SUR la ligne de bascule — régime indéterminé. "
+                "Clôture au-dessus = stabilisant, en-dessous = amplificateur."
+            )
     elif gex.regime == "AMPLIFICATEUR":
         if not gex_use_in_signal:
             # GEX dormant ou structurel : vocabulaire conditionnel, jamais affirmatif
@@ -971,17 +984,16 @@ def _build_synthese(
             invalidation = f"retour sous ${flip:,.0f}"
             opp = "si retour sous ce niveau, régime change — pression baissière s'active"
         else:
-            biais = "biais amplificateur neutre — direction non confirmée"
-            invalidation = f"retour confirmé sous ${flip:,.0f}"
-            # F8.4 — Mentionner N1 si un obstacle existe entre spot et flip
-            _obs_up = _first_obstacle_up(upside_ladder, flip)
-            if _obs_up:
-                opp = (
-                    f"si franchise de {_fmt_obstacle(_obs_up)} "
-                    f"puis ${flip:,.0f} (flip), accélération haussière violente vers ${niveau_haut:,.0f}"
-                )
-            else:
-                opp = f"si franchise confirmée au-dessus de ${flip:,.0f}, accélération haussière violente vers ${niveau_haut:,.0f}"
+            # ZONE_DE_FLIP neutre côté UP : même logique que DOWN — phrase 2-côtés.
+            _nxt_up = next((e["price"] for e in (upside_ladder or []) if e["price"] > flip * 1.001), None)
+            _nxt_dn = niveau_bas if niveau_bas and niveau_bas < flip else None
+            _above_target = f"${_nxt_up:,.0f}" if _nxt_up else "les résistances"
+            _below_target = f"${_nxt_dn:,.0f}" if _nxt_dn else "les supports"
+            return (
+                f"{situation} — sans biais directionnel. "
+                f"Au-dessus : franchise de ${flip:,.0f} active l'amplification haussière (accélération vers {_above_target}). "
+                f"En-dessous : retour sous ${flip:,.0f} renforce la pression baissière vers {_below_target}."
+            )
 
         return (
             f"{situation} — {biais}. "
@@ -1001,23 +1013,28 @@ def _build_synthese(
         if "haussier" in scenario:
             biais = "biais options haussier"
             invalidation = f"cassure sous ${flip:,.0f}"
-            opp = f"si ce niveau cède, amplification baissière vers ${niveau_bas:,.0f}"
+            # Trouver le vrai niveau sous le flip, pas le flip lui-même
+            _nxt_dn = next((e["price"] for e in (downside_ladder or []) if e["price"] < flip * 0.999), None)
+            _opp_target = f"${_nxt_dn:,.0f}" if _nxt_dn else "les niveaux inférieurs"
+            opp = f"si ce niveau cède, amplification baissière violente vers {_opp_target}"
         elif "baissier" in scenario:
             biais = "biais options baissier"
             invalidation = f"retour au-dessus de ${flip:,.0f}"
             opp = "si retour haussier, régime change — compression probable"
         else:
-            biais = "biais amplificateur neutre — direction non confirmée"
-            # F8.4 — Mentionner N1 si un obstacle existe entre spot et flip (côté down)
-            _obs_dn = _first_obstacle_dn(downside_ladder, flip)
-            if _obs_dn:
-                invalidation = (
-                    f"cassure de {_fmt_obstacle(_obs_dn)} "
-                    f"puis ${flip:,.0f} (flip)"
-                )
-            else:
-                invalidation = f"cassure sous ${flip:,.0f}"
-            opp = f"si cassure confirmée, accélération baissière violente vers ${niveau_bas:,.0f}"
+            # ZONE_DE_FLIP neutre : pas de biais directionnel exploitable.
+            # La phrase 4-parties (situation — biais — invalidation — opp) est inadaptée :
+            # il n'y a pas de "biais" ni d'"invalidation" au sens directionnel.
+            # On produit une phrase 2-côtés : ce qui se passe au-dessus vs en-dessous.
+            _nxt_dn = next((e["price"] for e in (downside_ladder or []) if e["price"] < flip * 0.999), None)
+            _nxt_up = niveau_haut if niveau_haut and niveau_haut > flip else None
+            _below_target = f"${_nxt_dn:,.0f}" if _nxt_dn else "les niveaux inférieurs"
+            _above_target = f"${_nxt_up:,.0f}" if _nxt_up else "les résistances"
+            return (
+                f"{situation} — sans biais directionnel. "
+                f"Au-dessus : clôture sur ${flip:,.0f} active le régime stabilisant (compression vers {_above_target}). "
+                f"En-dessous : cassure sous ${flip:,.0f} active l'amplification baissière (accélération vers {_below_target})."
+            )
 
         return (
             f"{situation} — {biais}. "

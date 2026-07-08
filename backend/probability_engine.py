@@ -1523,28 +1523,26 @@ def _build_interpretation(
 
     if b > u and b > 60:
         strength = "forte" if b > 70 else "modérée"
-        conf_str = f"confiance {bc:.0f}%"
+        conf_str = f"complétude {bc:.0f}%"
         flip_str = (
             f" Flip ${flip_level:,.0f} est la ligne rouge."
             if flip_level and flip_use_in_signal and spot < flip_level
             else ""
         )
         return (
-            f"Pression baissière {strength} 24h ({b:.0f}% — {conf_str}).{flip_str} "
-            f"{edge_b}."
+            f"Pression baissière {strength} 24h ({b:.0f}% — {conf_str}).{flip_str}"
         )
 
     if u > b and u > 60:
         strength = "forte" if u > 70 else "modérée"
-        conf_str = f"confiance {uc:.0f}%"
+        conf_str = f"complétude {uc:.0f}%"
         flip_str = (
             f" Flip ${flip_level:,.0f} est le niveau clé à défendre."
             if flip_level and flip_use_in_signal and spot > flip_level
             else ""
         )
         return (
-            f"Pression haussière {strength} 24h ({u:.0f}% — {conf_str}).{flip_str} "
-            f"{edge_u}."
+            f"Pression haussière {strength} 24h ({u:.0f}% — {conf_str}).{flip_str}"
         )
 
     # Signaux contradictoires ou proches de 50 — F14.3 texte différencié

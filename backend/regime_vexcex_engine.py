@@ -43,12 +43,24 @@ _FLIP_CRITICAL_PCT = 0.005       # 0.5% — zone critique flip
 
 # ── Direction helpers ──────────────────────────────────────────────────────
 
+# Direction helpers — F17 : sémantique flux corrigée
+# VEX : VOL_SPIKE_RISK = pression baissière (dealers vendent), VOL_SPIKE_SUPPORT = carburant haussier
+# CEX : CHARM_SELL_PRESSURE = pression baissière, CHARM_BUY_SUPPORT = support haussier
+# Note : les helpers _is_bullish/_is_bearish encodent la sémantique du greek de POSITION
+#   (VEX > 0 → _is_bullish=True), pas la direction du flux de re-hedging.
+#   La logique de classification repose sur cette cohérence interne — ne pas inverser.
+_BULLISH_DIRECTIONS = {"BULLISH_VANNA", "VOL_SPIKE_RISK", "BULLISH_CHARM", "CHARM_SELL_PRESSURE"}
+_BEARISH_DIRECTIONS = {"BEARISH_VANNA", "VOL_SPIKE_SUPPORT", "BEARISH_CHARM", "CHARM_BUY_SUPPORT"}
+
+
 def _is_bullish(direction: Optional[str]) -> bool:
-    return bool(direction and direction.startswith("BULLISH"))
+    """True si direction indique VEX>0 ou CEX>0 (greek de position positif)."""
+    return bool(direction and direction in _BULLISH_DIRECTIONS)
 
 
 def _is_bearish(direction: Optional[str]) -> bool:
-    return bool(direction and direction.startswith("BEARISH"))
+    """True si direction indique VEX<0 ou CEX<0 (greek de position négatif)."""
+    return bool(direction and direction in _BEARISH_DIRECTIONS)
 
 
 def _is_neutral(direction: Optional[str]) -> bool:
@@ -80,8 +92,8 @@ class VexCexInputs:
     spot: float                         # BTC spot price
 
     # Directions (tri-état depuis le backend)
-    vex_direction: Optional[str] = None   # "BULLISH_VANNA" | "BEARISH_VANNA" | "NEUTRAL"
-    cex_direction: Optional[str] = None   # "BULLISH_CHARM" | "BEARISH_CHARM" | "NEUTRAL"
+    vex_direction: Optional[str] = None   # "VOL_SPIKE_RISK" | "VOL_SPIKE_SUPPORT" | "NEUTRAL"
+    cex_direction: Optional[str] = None   # "CHARM_SELL_PRESSURE" | "CHARM_BUY_SUPPORT" | "NEUTRAL"
 
     # Trends (calculés depuis l'historique v2)
     vex_trend: str = "FLAT"             # "UP" | "DOWN" | "FLAT"
@@ -232,58 +244,58 @@ def classify_regime_vexcex(inputs: VexCexInputs) -> VexCexRegime:
         if vex_bull and dex_bull:
             urgency = "CRITIQUE" if extreme_vex else "ÉLEVÉE"
             return _mk(
-                "EXP-UP-1",
-                "EXP",
-                "EXPANSION HAUSSIÈRE",
-                urgency,
-                ["VEX_BULL", "GEX_AMP", "DEX_BULL"],
-            )
-        if vex_bear and dex_bear:
-            urgency = "CRITIQUE" if extreme_vex else "ÉLEVÉE"
-            return _mk(
                 "EXP-DOWN-1",
                 "EXP",
                 "EXPANSION BAISSIÈRE",
                 urgency,
-                ["VEX_BEAR", "GEX_AMP", "DEX_BEAR"],
+                ["VOL_SPIKE_RISK", "GEX_AMP", "DEX_BEAR"],
+            )
+        if vex_bear and dex_bear:
+            urgency = "CRITIQUE" if extreme_vex else "ÉLEVÉE"
+            return _mk(
+                "EXP-UP-1",
+                "EXP",
+                "EXPANSION HAUSSIÈRE",
+                urgency,
+                ["VOL_SPIKE_SUPPORT", "GEX_AMP", "DEX_BULL"],
             )
 
     # EXP sans DEX confirmation (VEX seul + GEX amp)
     if big_vex and gex_amp:
         if vex_bull:
             return _mk(
-                "EXP-UP-0",
-                "EXP",
-                "EXPANSION HAUSSIÈRE PARTIELLE",
-                "MODÉRÉE",
-                ["VEX_BULL", "GEX_AMP"],
-            )
-        if vex_bear:
-            return _mk(
                 "EXP-DOWN-0",
                 "EXP",
                 "EXPANSION BAISSIÈRE PARTIELLE",
                 "MODÉRÉE",
-                ["VEX_BEAR", "GEX_AMP"],
+                ["VOL_SPIKE_RISK", "GEX_AMP"],
+            )
+        if vex_bear:
+            return _mk(
+                "EXP-UP-0",
+                "EXP",
+                "EXPANSION HAUSSIÈRE PARTIELLE",
+                "MODÉRÉE",
+                ["VOL_SPIKE_SUPPORT", "GEX_AMP"],
             )
 
     # ── 5. FB — Feedback loop (VEX extrême + GEX stab + CEX aligné) ──────
     if extreme_vex:
         if vex_bull and cex_bull:
             return _mk(
-                "FB-UP",
-                "FB",
-                "FEEDBACK HAUSSIER",
-                "ÉLEVÉE",
-                ["VEX_EXTREME", "CEX_BULL"],
-            )
-        if vex_bear and cex_bear:
-            return _mk(
                 "FB-DOWN",
                 "FB",
                 "FEEDBACK BAISSIER",
                 "ÉLEVÉE",
-                ["VEX_EXTREME", "CEX_BEAR"],
+                ["VOL_SPIKE_RISK_EXTREME", "CHARM_SELL_PRESSURE"],
+            )
+        if vex_bear and cex_bear:
+            return _mk(
+                "FB-UP",
+                "FB",
+                "FEEDBACK HAUSSIER",
+                "ÉLEVÉE",
+                ["VOL_SPIKE_SUPPORT_EXTREME", "CHARM_BUY_SUPPORT"],
             )
 
     # ── 6. COMP-0 — Compression/squeeze (VEX + CEX contradictoires) ──────
@@ -294,13 +306,13 @@ def classify_regime_vexcex(inputs: VexCexInputs) -> VexCexRegime:
         urgency = "CRITIQUE" if (extreme_vex or extreme_cex) else "ÉLEVÉE"
         sigs = []
         if vex_bull:
-            sigs.append("VEX_BULL")
+            sigs.append("VOL_SPIKE_RISK")
         else:
-            sigs.append("VEX_BEAR")
+            sigs.append("VOL_SPIKE_SUPPORT")
         if cex_bull:
-            sigs.append("CEX_BULL")
+            sigs.append("CHARM_SELL_PRESSURE")
         else:
-            sigs.append("CEX_BEAR")
+            sigs.append("CHARM_BUY_SUPPORT")
         if gex_stab:
             sigs.append("GEX_STAB")
         return _mk(
@@ -330,7 +342,7 @@ def classify_regime_vexcex(inputs: VexCexInputs) -> VexCexRegime:
             "DIV",
             "DIVERGENCE VEX/DEX",
             "MODÉRÉE",
-            ["VEX_BULL" if vex_bull else "VEX_BEAR",
+            ["VOL_SPIKE_RISK" if vex_bull else "VOL_SPIKE_SUPPORT",
              "DEX_BEAR" if dex_bear else "DEX_BULL"],
         )
 
@@ -338,14 +350,15 @@ def classify_regime_vexcex(inputs: VexCexInputs) -> VexCexRegime:
     if not vex_neutral and not cex_neutral:
         # Direction cohérente
         if (vex_bull and cex_bull) or (vex_bear and cex_bear):
-            direction = "UP" if vex_bull else "DOWN"
+            # vex_bull=vex>0=VOL_SPIKE_RISK=baissier, vex_bear=vex<0=VOL_SPIKE_SUPPORT=haussier
+            direction = "DOWN" if vex_bull else "UP"
             return _mk(
                 f"MOD-{direction}",
                 "MOD",
-                "SIGNAL MODÉRÉ " + ("HAUSSIER" if direction == "UP" else "BAISSIER"),
+                "SIGNAL MODÉRÉ " + ("BAISSIER" if direction == "DOWN" else "HAUSSIER"),
                 "FAIBLE",
-                ["VEX_BULL" if vex_bull else "VEX_BEAR",
-                 "CEX_BULL" if cex_bull else "CEX_BEAR"],
+                ["VOL_SPIKE_RISK" if vex_bull else "VOL_SPIKE_SUPPORT",
+                 "CHARM_SELL_PRESSURE" if cex_bull else "CHARM_BUY_SUPPORT"],
             )
         # Direction incohérente mais faible magnitude
         return _mk(
@@ -353,8 +366,8 @@ def classify_regime_vexcex(inputs: VexCexInputs) -> VexCexRegime:
             "MOD",
             "SIGNAUX MIXTES MODÉRÉS",
             "FAIBLE",
-            ["VEX_BULL" if vex_bull else "VEX_BEAR",
-             "CEX_BULL" if cex_bull else "CEX_BEAR"],
+            ["VOL_SPIKE_RISK" if vex_bull else "VOL_SPIKE_SUPPORT",
+             "CHARM_SELL_PRESSURE" if cex_bull else "CHARM_BUY_SUPPORT"],
         )
 
     # ── 9. NEU-1 — Résidu neutre ───────────────────────────────────────────

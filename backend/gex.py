@@ -607,7 +607,9 @@ def _find_gamma_walls(gex_by_strike: Dict[float, float]) -> List[float]:
 
 
 GEX_NEUTRAL_THRESHOLD = 5_000_000  # $5M — zone morte, aucune alerte en dessous
-_FLIP_ZONE_PCT = 0.01  # ±1% du spot = zone de flip
+_FLIP_ZONE_ENTRY = 0.010    # entrée ZONE_DE_FLIP  < 1.0%
+_FLIP_ZONE_EXIT  = 0.0125   # sortie ZONE_DE_FLIP  > 1.25%  (hystérésis asymétrique — F16.2)
+_last_regime_meca: str = "NEUTRE"   # F16.2 — état précédent pour la bande grise 1.0–1.25%
 
 
 def _classify_regime(total_gex: float) -> str:
@@ -669,12 +671,17 @@ def classify_regime_spot_flip(
         }
 
     dist_pct = abs(spot - flip) / spot
-    if dist_pct < _FLIP_ZONE_PCT:
+    global _last_regime_meca
+    if dist_pct < _FLIP_ZONE_ENTRY:
         regime_meca = "ZONE_DE_FLIP"
-    elif spot > flip:
-        regime_meca = "STABILISANT"
-    else:
-        regime_meca = "AMPLIFICATEUR"
+    elif dist_pct > _FLIP_ZONE_EXIT:
+        regime_meca = "STABILISANT" if spot > flip else "AMPLIFICATEUR"
+    else:  # bande grise 1.0–1.25% : hystérésis — F16.2
+        if _last_regime_meca == "ZONE_DE_FLIP":
+            regime_meca = "ZONE_DE_FLIP"
+        else:
+            regime_meca = "STABILISANT" if spot > flip else "AMPLIFICATEUR"
+    _last_regime_meca = regime_meca
 
     # F8.1 — Check de cohérence basé sur le GEX LOCAL (±2% spot) — pas le GEX total
     # STABILISANT : spot > flip → dealers long gamma → calls locaux = cohérent

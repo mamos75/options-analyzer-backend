@@ -22,11 +22,11 @@ const _ACTION_FR = {
 };
 
 const _URGENCY_CFG = {
-  'CRITIQUE': { color: '#ef4444', label: 'zone critique' },
-  'ÉLEVÉE':   { color: '#f59e0b', label: 'zone de pression' },
-  'MODÉRÉE':  { color: '#64748b', label: 'zone modérée' },
-  'FAIBLE':   { color: '#475569', label: 'zone faible' },
-  'NEUTRE':   { color: '#334155', label: 'zone neutre' },
+  'CRITIQUE': { color: '#ef4444', label: 'CRITIQUE' },
+  'ÉLEVÉE':   { color: '#f59e0b', label: 'ÉLEVÉE' },
+  'MODÉRÉE':  { color: '#64748b', label: 'MODÉRÉE' },
+  'FAIBLE':   { color: '#475569', label: 'FAIBLE' },
+  'NEUTRE':   { color: '#334155', label: 'NEUTRE' },
 };
 
 export async function loadArbiterQuick(signal) {
@@ -104,13 +104,34 @@ export async function loadArbiterQuick(signal) {
 
     const fmtP = v => v ? '$' + Math.round(v).toLocaleString() : null;
 
-    // Action phrase : verdict + contexte urgence (JAMAIS afficher CRITIQUE sans "quoi faire")
+    // F16.1 — Penchant conditionnel ZONE_DE_FLIP
+    const inFlipZone = ['FL-0','FL-1'].includes(dec.vexcex_regime_id || '');
+    let penchantLabel = null;
+    if (inFlipZone && verdict === 'OBSERVE') {
+      const sigs = dec.signals_used || [];
+      const upCount   = sigs.filter(s => ['UP','BULLISH_FLOWS'].includes(s.direction)).length;
+      const downCount = sigs.filter(s => ['DOWN','BEARISH_FLOWS'].includes(s.direction)).length;
+      if (upCount >= 2 && upCount > downCount) {
+        const lvl = triggerLevel ? `$${Math.round(triggerLevel).toLocaleString()}` : '';
+        penchantLabel = `INDÉCIS · penchant haussier${lvl ? ` si ${lvl} tient` : ''}`;
+      } else if (downCount >= 2 && downCount > upCount) {
+        const lvl = triggerLevel ? `$${Math.round(triggerLevel).toLocaleString()}` : '';
+        penchantLabel = `INDÉCIS · penchant baissier${lvl ? ` si ${lvl} cède` : ''}`;
+      }
+    }
+
+        // Action phrase : verdict + contexte urgence (JAMAIS afficher CRITIQUE sans "quoi faire")
     const urgCtx = urgency === 'CRITIQUE'
-      ? ` La zone ${urg.label} exige une surveillance accrue — pas d'action mécanique sans confirmation.`
+      ? ` Zone CRITIQUE — surveillance accrue. Pas d’action mécanique sans confirmation.`
       : urgency === 'ÉLEVÉE'
       ? ` Zone de pression active.`
       : '';
     const actionPhrase = phrase + urgCtx;
+
+    // F16.6 — CONFLIT detail banner
+    const conflitDetail = (state === 'CONFLIT' && (dec.contradictions||[]).length > 0)
+      ? dec.contradictions[0].detail
+      : null;
 
     // Fiabilité effective = min(confPct, stale degradation)
     const reliabilityPct = reliabilityReduced ? Math.min(confPct, 15) : confPct;
@@ -128,8 +149,9 @@ export async function loadArbiterQuick(signal) {
         <div style="grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:${vc.bg};border:1.5px solid ${vc.border};border-radius:12px;gap:12px">
           <div>
             <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:${vc.color};margin-bottom:4px">Direction</div>
-            <div style="font-size:22px;font-weight:900;color:${vc.color};letter-spacing:.5px">${vc.icon} ${vc.label}</div>
+            <div style="font-size:22px;font-weight:900;color:${vc.color};letter-spacing:.5px">${penchantLabel ? `➡ ${penchantLabel}` : `${vc.icon} ${vc.label}`}</div>
             ${regime ? `<div style="font-size:10px;color:${urg.color};margin-top:3px">${esc(regime)}</div>` : ''}
+            ${penchantLabel ? `<div style="font-size:9px;color:#94a3b8;margin-top:2px">Direction ≠ action — OBSERVER</div>` : ''}
           </div>
           <div style="text-align:right;flex-shrink:0">
             <div style="font-size:9px;color:var(--muted);margin-bottom:2px;text-transform:uppercase;letter-spacing:.5px">Fiabilité</div>
@@ -158,6 +180,13 @@ export async function loadArbiterQuick(signal) {
         </div>
 
       </div>
+
+      ${conflitDetail ? `
+      <div style="margin-top:8px;padding:7px 12px;background:#ef444411;
+      border:1px solid #ef444433;border-radius:8px;font-size:10px;
+      color:#fca5a5;line-height:1.4">
+        ⚑ CONFLIT : ${esc(conflitDetail)}
+      </div>` : ''}
     `;
   } catch(e) {
     if (el) el.innerHTML = `<div style="color:var(--muted);font-size:11px">⚠ Bloc indisponible</div>`;
