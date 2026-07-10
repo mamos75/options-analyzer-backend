@@ -46,7 +46,7 @@ export async function loadGexDex(signal) {
       gexImpact = 'Donn\u00e9es GEX indisponibles';
     } else if (gexRegimeMeca === 'AMPLIFICATEUR') {
       const absGex = lastGex != null ? (Math.abs(lastGex)/1e9).toFixed(2) : '?';
-      gexImpact = `Spot sous le Gamma Flip — les dealers amplifient les mouvements. Intensit\u00e9 globale (${absGex}B) mesure la force du pin au-dessus.`;
+      gexImpact = `Spot sous le Gamma Flip — les dealers amplifient les mouvements. Intensit\u00e9 : ${absGex}B — plus c'est élevé, plus les moves sont amplifiés.`;
     } else if (gexRegimeMeca === 'STABILISANT') {
       gexImpact = 'Spot au-dessus du Gamma Flip — les dealers absorbent les mouvements (pin effect).';
     } else if (gexRegimeMeca === 'ZONE_DE_FLIP') {
@@ -58,8 +58,8 @@ export async function loadGexDex(signal) {
         : 'GEX positif \u2192 dealers absorbent les mouvements (stabilisateur / pin effect)';
     }
     const dexImpact = lastDex > 0
-      ? 'DEX positif \u2192 dealers couvrent en vendant BTC si le prix monte (r\u00e9sistance)'
-      : 'DEX n\u00e9gatif \u2192 dealers ach\u00e8tent BTC si le prix baisse (support)';
+      ? `DEX +${Math.round(Math.abs(lastDex)).toLocaleString()} BTC — dealers long delta : vendent si le prix monte (résistance dynamique)`
+      : `DEX ${Math.round(lastDex).toLocaleString()} BTC — dealers short delta : achètent si le prix monte (soutien dynamique)`;
 
     el.innerHTML = `
       <div class="gex-dex-grid">

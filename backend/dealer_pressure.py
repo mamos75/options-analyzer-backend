@@ -93,9 +93,9 @@ def _flux_conditionnel(net_delta: float, direction: str) -> str:
     """Ce que les dealers FERONT conditionnellement (hedging delta)."""
     abs_delta = abs(net_delta)
     if direction == "BULLISH_FLOWS":
-        return f"Les dealers doivent acheter ~{abs_delta:,.0f} BTC si BTC baisse — soutien conditionnel"
+        return f"Les dealers doivent acheter ~{abs_delta:,.0f} BTC si BTC monte — re-hedging short delta (soutien dynamique)"
     if direction == "BEARISH_FLOWS":
-        return f"Les dealers doivent vendre ~{abs_delta:,.0f} BTC si BTC monte — résistance conditionnelle"
+        return f"Les dealers doivent vendre ~{abs_delta:,.0f} BTC si BTC monte — re-hedging long delta (résistance dynamique)"
     return "Pas de biais directionnel notable des dealers"
 
 
@@ -197,9 +197,9 @@ def dealer_summary(dp: DealerPressure) -> str:
 def dex_narrative(dp: DealerPressure) -> str:
     """Titre headline — toujours cohérent avec gauge_color."""
     if dp.direction == "BEARISH_FLOWS":
-        return "Résistance dealers : les dealers vendent BTC si le prix monte."
+        return "Résistance dealers : les dealers vendent BTC si le prix monte (re-hedging)."
     if dp.direction == "BULLISH_FLOWS":
-        return "Soutien dealers : les dealers achètent BTC si le prix baisse."
+        return "Soutien dealers : les dealers achètent BTC si le prix monte (re-hedging)."
     return "Pression dealers neutre."
 
 
