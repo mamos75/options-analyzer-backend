@@ -16,6 +16,8 @@ Assertions :
   (o) état SUPPRESSED conforme : si verdict OBSERVE ou arbiter < 30%, aucun trade directionnel
   (p) primary_thesis sans stop/target quand trade.type=WAIT
   (m2) types de niveaux dans les textes = types reels du snapshot
+  (l)  gex_regime provient de regime_meca (source unique v3-bis)
+  (m1) niveaux mentionnes dans textes ont un montant $ valide
 """
 from __future__ import annotations
 import logging
@@ -221,6 +223,65 @@ def check_level_type_coherence(payload: dict) -> dict:
     return payload
 
 
+
+# -- Assertion (l) -- regime source unique : regime_meca ----------------------
+def check_regime_source(payload: dict) -> dict:
+    """
+    (l) gex_regime dans le payload doit provenir de regime_meca (source v3-bis).
+    Si "_gex_source" == "legacy" -> violation BLOQUANT.
+    Champ "_gex_source" injecte par main.py pour audit (optionnel).
+    """
+    gex_source = payload.get("_gex_source")
+    if gex_source == "legacy":
+        regime = payload.get("gex_regime", "?")
+        _record("(l) regime_source", "BLOQUANT",
+                f"gex_regime='{regime}' provient du champ legacy (gex_obj.regime) "
+                f"au lieu de regime_meca. Corrigez l'appel dans main.py.")
+    return payload
+
+
+# -- Assertion (m1) -- niveaux cles avec montants valides ---------------------
+_M1_KEYWORDS = [
+    ("flip_level",  ["flip", "zone de flip", "gamma flip"]),
+    ("max_pain",    ["max pain"]),
+    ("call_wall",   ["call wall"]),
+    ("put_wall",    ["put wall"]),
+]
+
+def check_level_amounts(payload: dict) -> dict:
+    """
+    (m1) Si un texte mentionne un niveau cle, sa valeur numerique doit etre non-nulle.
+    Cela detecte les cas ou on parle d'un flip/max_pain/wall a $0 ou None.
+    Severite WARNING : la valeur 0/None est loggee, le texte n'est pas remplace.
+    """
+    text_fields = ["primary_thesis", "phrase_synthese", "scenario_principal"]
+    levels = payload.get("_niveau_types") or {}
+    level_map = {
+        "flip_level": levels.get("flip_level"),
+        "max_pain":   levels.get("max_pain"),
+        "call_wall":  None,   # montant non transmis dans _niveau_types actuellement
+        "put_wall":   None,
+    }
+    # Fallback : chercher dans levels directement si expose
+    if not levels:
+        return payload
+
+    for field in text_fields:
+        text = payload.get(field, "")
+        if not text:
+            continue
+        text_lower = text.lower()
+        for level_key, keywords in _M1_KEYWORDS:
+            val = level_map.get(level_key)
+            if val is None or val == 0:
+                for kw in keywords:
+                    if kw in text_lower:
+                        _record("(m1) level_amounts", "WARNING",
+                                f"'{kw}' mentionne dans {field} mais {level_key}={val!r}. "
+                                f"Montant inconnu ou nul.")
+                        break
+    return payload
+
 # ── Point d'entrée principal ─────────────────────────────────────────────────
 def run_coherence_checks(payload: dict, endpoint: str = "") -> dict:
     """
@@ -230,11 +291,20 @@ def run_coherence_checks(payload: dict, endpoint: str = "") -> dict:
     if not payload or not isinstance(payload, dict):
         return payload
 
+    payload = check_regime_source(payload)
     payload = check_forces_direction(payload)
     payload = check_confidence_unity(payload)
     payload = check_suppressed_state(payload)
     payload = check_thesis_no_trade_residues(payload)
     payload = check_level_type_coherence(payload)
+    payload = check_level_amounts(payload)
+    # Injecter le bloc coherence:{} dans la reponse
+    n_violations = sum(v for k, v in _violation_counts.items())
+    payload['coherence'] = {
+        'status': 'OK' if n_violations == 0 else 'VIOLATIONS',
+        'violations_total': n_violations,
+        'endpoint': endpoint,
+    }
     return payload
 
 

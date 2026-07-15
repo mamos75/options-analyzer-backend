@@ -44,7 +44,7 @@ export async function loadArbiterQuick(signal) {
     const verdict   = dec.verdict        || 'OBSERVE';
     const action    = dec.action         || null;   // F8.3
     const state     = dec.state          || null;   // F8.3
-    const confPct   = dec.confidence_pct ?? 0;
+    const confPct   = dec.global_confidence ?? dec.confidence_pct ?? 0;
     const phrase    = dec.phrase         || '';
     const dataStale = dec.data_quality === 'STALE';
     const urgency   = dec.vexcex_urgency || 'NEUTRE';
@@ -54,8 +54,11 @@ export async function loadArbiterQuick(signal) {
     // On expose aussi gex_flip_incoherent dans /api/decision si possible, sinon on skip
     const flipIncoherent = !!(dec.gex_flip_incoherent);
     const structureMixte = !!(dec.structure_mixte);
+    // P4 — pré-expiration
+    const preExpWarning  = dec.pre_expiration_warning || null;
+    const signalDteDegraded = !!(dec.signal_dte_degraded);
     // structure_mixte est informatif seulement — ne réduit pas la fiabilité
-    const reliabilityReduced = dataStale || (flipIncoherent && !structureMixte) || confPct < 20;
+    const reliabilityReduced = dataStale || (flipIncoherent && !structureMixte) || confPct < 20 || signalDteDegraded;
 
     const vc   = _VERDICT_CFG[verdict]  || _VERDICT_CFG['OBSERVE'];
     const urg  = _URGENCY_CFG[urgency]  || _URGENCY_CFG['NEUTRE'];
@@ -99,7 +102,8 @@ export async function loadArbiterQuick(signal) {
       const zoneMax = Math.round(flipZone.max).toLocaleString();
       triggerLbl = flipZone.moving ? 'Flip en déplacement (expiration proche)' : 'Zone Gamma Flip (instable)';
       if (flipZone.display) triggerLevel = flipZone.display;
-      triggerExtra = `Zone : $${zoneMin} – $${zoneMax}`;
+      const pivotDisplay = flipZone.display ? Math.round(flipZone.display).toLocaleString() : zoneMax;
+      triggerExtra = `Zone $${zoneMin}–$${zoneMax} (pivot $${pivotDisplay})`;
     }
 
     const fmtP = v => v ? '$' + Math.round(v).toLocaleString() : null;
@@ -140,7 +144,11 @@ export async function loadArbiterQuick(signal) {
     el.innerHTML = `
       ${reliabilityReduced ? `
       <div style="display:flex;align-items:center;gap:8px;padding:7px 12px;background:#ef444411;border:1px solid #ef444433;border-radius:8px;font-size:11px;color:#ef4444;margin-bottom:10px;font-weight:600">
-        ⚠ FIABILITÉ RÉDUITE — ${dataStale ? 'données périmées' : flipIncoherent ? 'signaux GEX/flip contradictoires' : 'confiance faible'}
+        ⚠ FIABILITÉ RÉDUITE — ${dataStale ? 'données périmées' : signalDteDegraded ? 'signal pré-expiration' : flipIncoherent ? 'signaux GEX/flip contradictoires' : 'confiance faible'}
+      </div>` : ''}
+      ${preExpWarning ? `
+      <div style="display:flex;align-items:flex-start;gap:8px;padding:7px 12px;background:#f59e0b11;border:1px solid #f59e0b44;border-radius:8px;font-size:10px;color:#f59e0b;margin-bottom:10px;line-height:1.4">
+        ⏱ PRÉ-EXPIRATION — ${esc(preExpWarning)}
       </div>` : ''}
 
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
@@ -154,7 +162,7 @@ export async function loadArbiterQuick(signal) {
             ${penchantLabel ? `<div style="font-size:9px;color:#94a3b8;margin-top:2px">Direction ≠ action — OBSERVER</div>` : ''}
           </div>
           <div style="text-align:right;flex-shrink:0">
-            <div style="font-size:9px;color:var(--muted);margin-bottom:2px;text-transform:uppercase;letter-spacing:.5px">Fiabilité</div>
+            <div style="font-size:9px;color:var(--muted);margin-bottom:2px;text-transform:uppercase;letter-spacing:.5px">Confiance globale</div>
             <div style="font-size:20px;font-weight:900;color:${reliabilityColor}">${reliabilityPct}%</div>
           </div>
         </div>

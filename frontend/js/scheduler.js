@@ -19,6 +19,7 @@ import { loadGexDex } from './widgets/gex_dex.js';
 import { loadRegimeSummary } from './widgets/regime.js';
 import { loadArbiterQuick } from './widgets/arbiter_quick.js';
 import { loadVexCex, drawVcCharts } from './widgets/vex_cex.js';
+import { loadProDecision } from './widgets/pro_decision.js';
 
 let _nextRefreshAt = 0;
 
@@ -73,6 +74,7 @@ export async function loadAllData() {
     loadNarrative(signal),
     // loadModel removed F12 — model card hidden, background eval continues via /api/model_arena
     loadVexCex(signal),
+    loadProDecision(signal),
   ]);
 
   if (seq !== getLoadSeq()) return;

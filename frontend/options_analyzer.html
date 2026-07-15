@@ -789,11 +789,14 @@
   .vol-term-oi { font-size:9px; color:var(--muted); }
 
   /* ─── GEX/DEX PANEL ─── */
+  .gex-dex-summary { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:14px; }
   .gex-dex-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
   .gex-dex-card { background:rgba(255,255,255,.04); border:1px solid var(--border); border-radius:12px; padding:12px; }
   .gex-dex-title { font-size:10px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); margin-bottom:4px; }
-  .gex-dex-value { font-size:16px; font-weight:900; margin-bottom:8px; }
+  .gex-dex-value { font-size:18px; font-weight:900; margin-bottom:2px; }
+  .gex-dex-delta { font-size:10px; color:var(--muted); margin-bottom:6px; }
   .gex-dex-impact { font-size:10px; color:var(--muted); line-height:1.4; margin-top:6px; padding-top:6px; border-top:1px solid var(--border); }
+  .gex-dex-chart-wrap { position:relative; background:rgba(0,0,0,.2); border-radius:10px; overflow:hidden; padding:4px 0; }
   .gex-dex-legend {
     font-size: 10px;
     color: var(--muted);
@@ -1018,6 +1021,22 @@
       </div>
     </div>
 
+
+    <!-- MODULE PRO DECISION: MOTEUR DE DÉCISION PRO OPTIONS -->
+    <div class="card" id="m-pro-decision" style="border:1.5px solid rgba(245,158,11,0.20);background:rgba(245,158,11,0.03)">
+      <div class="card-label" style="color:#f59e0b">
+        <div class="card-label-dot" style="background:#f59e0b"></div>
+        DÉCISION PRO OPTIONS
+      </div>
+      <div id="pro-decision-content">
+        <div class="skeleton" style="width:100%;height:64px;border-radius:12px;margin-bottom:10px;"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+          <div class="skeleton" style="height:80px;border-radius:10px;"></div>
+          <div class="skeleton" style="height:80px;border-radius:10px;"></div>
+        </div>
+        <div class="skeleton" style="width:100%;height:40px;border-radius:9px;"></div>
+      </div>
+    </div>
   </main>
 </div>
 

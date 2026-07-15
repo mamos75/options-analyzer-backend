@@ -15,15 +15,15 @@ Convention (v2, short-all) : dealers short TOUTES les options — meme hypothese
   Flux de re-hedging sur +dσ = d(delta_dealer)/dσ = -vanna_client.
   Flux de re-hedging sur +dt = d(delta_dealer)/dt = -charm_client.
 
-  VEX > 0 : un choc de vol implicite (IV monte) force les dealers a VENDRE du BTC.
+  VEX > 0 : un choc de vol implicite (IV monte) force les dealers à VENDRE du BTC.
             (Puts OTM dominent : delta_dealer monte sur +dσ → dealers vendent pour rester hedges.)
             → VOL_SPIKE_RISK : pression baissière sur choc de volatilité.
-  VEX < 0 : un choc de vol implicite force les dealers a ACHETER du BTC.
+  VEX < 0 : un choc de vol implicite force les dealers à ACHETER du BTC.
             (Calls OTM dominent : delta_dealer baisse sur +dσ → dealers achètent.)
             → VOL_SPIKE_SUPPORT : carburant d'un squeeze haussier sur choc de vol.
-  CEX > 0 : le temps qui passe (theta) oblige les dealers a VENDRE du BTC.
+  CEX > 0 : le temps qui passe (theta) oblige les dealers à VENDRE du BTC.
             → CHARM_SELL_PRESSURE : pression baissière passive dans le temps.
-  CEX < 0 : le temps qui passe pousse les dealers a ACHETER du BTC.
+  CEX < 0 : le temps qui passe pousse les dealers à ACHETER du BTC.
             → CHARM_BUY_SUPPORT : support haussier passif dans le temps.
 
 Convention v1 (obsolete, CP-skew) : calls et puts de signes opposes —
@@ -104,8 +104,8 @@ def _fmt(val: float, decimals: int = 1) -> str:
 class VexCexProfile:
     vex_total: float
     cex_total: float
-    vex_by_strike: List[dict]   # [{strike, vex}, ...] top-5 by abs
-    cex_by_strike: List[dict]   # [{strike, cex}, ...] top-5 by abs
+    vex_by_strike: List[dict]   # [{strike, vex}, ...] top-5 by abs(vex), sorted by strike asc
+    cex_by_strike: List[dict]   # [{strike, cex}, ...] top-5 by abs(cex), sorted by strike asc
     vex_total_fmt: str
     cex_total_fmt: str
     vex_direction: str
@@ -147,8 +147,15 @@ def compute_vex_cex(snapshot: MarketSnapshot) -> VexCexProfile:
     vex_total = sum(vex_map.values())
     cex_total = sum(cex_map.values())
 
-    top_vex = sorted(vex_map.items(), key=lambda x: abs(x[1]), reverse=True)[:5]
-    top_cex = sorted(cex_map.items(), key=lambda x: abs(x[1]), reverse=True)[:5]
+    # Selection top-5 par abs(valeur), puis retri par strike croissant pour l'affichage
+    top_vex = sorted(
+        sorted(vex_map.items(), key=lambda x: abs(x[1]), reverse=True)[:5],
+        key=lambda x: x[0]
+    )
+    top_cex = sorted(
+        sorted(cex_map.items(), key=lambda x: abs(x[1]), reverse=True)[:5],
+        key=lambda x: x[0]
+    )
 
     vex_dir = ("VOL_SPIKE_RISK"    if vex_total >  _VEX_NEUTRAL_THRESH else
                "VOL_SPIKE_SUPPORT" if vex_total < -_VEX_NEUTRAL_THRESH else "NEUTRAL")
@@ -157,16 +164,16 @@ def compute_vex_cex(snapshot: MarketSnapshot) -> VexCexProfile:
 
     # Interpretations coherentes avec la convention short-all (v2)
     vex_interp = (
-        "VEX+ (VOL_SPIKE_RISK) : un choc de vol implicite force les dealers a VENDRE du BTC — pression baissiere."
+        "VEX+ (VOL_SPIKE_RISK) : un choc de vol implicite force les dealers à VENDRE du BTC — pression baissière."
         if vex_total > _VEX_NEUTRAL_THRESH else
-        "VEX- (VOL_SPIKE_SUPPORT) : un choc de vol implicite force les dealers a ACHETER du BTC — carburant squeeze haussier."
+        "VEX- (VOL_SPIKE_SUPPORT) : un choc de vol implicite force les dealers à ACHETER du BTC — carburant squeeze haussier."
         if vex_total < -_VEX_NEUTRAL_THRESH else
         "VEX neutre : la vanna n'exerce pas de pression directionnelle significative."
     )
     cex_interp = (
-        "CEX+ (CHARM_SELL_PRESSURE) : l'ecoulement du temps oblige les dealers a VENDRE du BTC — pression baissiere passive."
+        "CEX+ (CHARM_SELL_PRESSURE) : l'écoulement du temps oblige les dealers à VENDRE du BTC — pression baissière passive."
         if cex_total > _CEX_NEUTRAL_THRESH else
-        "CEX- (CHARM_BUY_SUPPORT) : l'ecoulement du temps pousse les dealers a ACHETER du BTC — support haussier passif."
+        "CEX- (CHARM_BUY_SUPPORT) : l'écoulement du temps pousse les dealers à ACHETER du BTC — support haussier passif."
         if cex_total < -_CEX_NEUTRAL_THRESH else
         "CEX neutre : le charm decay n'exerce pas de pression directionnelle significative."
     )

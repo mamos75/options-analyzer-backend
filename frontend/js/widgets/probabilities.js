@@ -86,7 +86,7 @@ export async function loadProbabilities(signal) {
                 <div class="prob-bar" id="pb-${hi}-dom" style="width:0%;background:var(--yellow)"></div>
               </div>
               <div class="prob-sub">Pas de biais exploitable — scores trop proches</div>
-              ${conf != null ? `<div class="prob-meta">Complétude : ${Math.round(conf)}%</div>` : ''}
+              ${conf != null ? `<div class="prob-meta"><span title="Complétude des règles : ${Math.round(conf)}%" style="font-size:9px;color:var(--muted);cursor:help">ℹ ${Math.round(conf)}% règles actives</span></div>` : ''}
             </div>
           </div>
         `;
@@ -113,7 +113,7 @@ export async function loadProbabilities(signal) {
               <div class="prob-bar ${dominant}" id="pb-${hi}-dom" style="width:0%"></div>
             </div>
             <div class="prob-meta">
-              ${domConf != null ? `Complétude : ${Math.round(domConf)}%` : ''}
+              ${domConf != null ? `<span title="Complétude des règles : ${Math.round(domConf)}%" style="cursor:help">ℹ ${Math.round(domConf)}% règles</span>` : ''}
               ${domHist ? ` · Validation : ${esc(domHist)}` : ''}
             </div>
           </div>

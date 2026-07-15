@@ -62,6 +62,16 @@ class ArbiteredDecision:
     # F8.3 — Vocabulaire desk premium
     state: str = "RAS"    # "RAS" | "TENSION" | "CONFLIT" | "CRITIQUE"
     action: str = "OBSERVER"  # "OBSERVER" | "PRÉPARER" | "AGIR_LONG" | "AGIR_SHORT"
+    # P2 — Directional Bias score transmis (pour cap conviction Pro)
+    directional_bias_score: Optional[float] = None
+    # P3 — Probability Engine signal transmis (pour échelle unifiée)
+    pe_dominant_direction: Optional[str] = None
+    pe_dominant_probability: Optional[float] = None
+    # P3 — Confiance globale unifiée (alias de confidence_pct, source de vérité unique)
+    global_confidence: Optional[int] = None
+    # P4 — TTL / décroissance pré-expiration
+    pre_expiration_warning: Optional[str] = None   # phrase d'alerte si signal dominé par contrat expirant
+    signal_dte_degraded: bool = False               # True si ≥1 signal dégradé par TTL
 
 
 # ── Table de verdicts VEX/CEX par regime_id ───────────────────────────────
@@ -247,6 +257,13 @@ def compute_decision(
     vexcex_phase: Optional[str] = None,
     vexcex_urgency: Optional[str] = None,
     vexcex_label: Optional[str] = None,
+    # P2 — Directional Bias score (-100 → +100) transmis depuis /api/decision
+    directional_bias_score: Optional[float] = None,
+    # P3 — Probability Engine dominant signal (direction + score 0-100 centré à 50)
+    pe_dominant_direction: Optional[str] = None,  # "BULL" | "BEAR" | None
+    pe_dominant_probability: Optional[float] = None,  # 0-100, 50 = équilibre
+    # P4 — Contexte DTE du signal dominant pour décroissance pré-expiration
+    signal_dte_context: Optional[dict] = None,  # {"max_pain_dte": int, "flip_top_dte": int}
 ) -> ArbiteredDecision:
     """
     Arbitrage final entre tous les signaux disponibles.
@@ -259,6 +276,10 @@ def compute_decision(
     - NEU-* VEX/CEX → confiance plafonnée à 20% (V5)
     - FL-0 → verdict forcé OBSERVE (V5)
     - EXP-*-1 → boost +15 confiance (V5)
+    - |directional_bias| ≥ 70 → override vers SIGNAL_UP/DOWN + boost confiance (P2)
+    - PE dominant probability > 57% ou < 43% → signal contributif (P3)
+    - Contrat dominant DTE ≤ 3 → signal dégradé (TTL pré-expiration) + warning (P4)
+    - Contrat dominant DTE ≤ 1 → signal ignoré (expiré ou J-expiration)
 
     Règle de décision :
     - 0 signal actif → NO_TRADE
@@ -281,6 +302,33 @@ def compute_decision(
         if live_outcomes < 10:
             data_quality = "INSUFFICIENT"
 
+    # ── P4 — Contexte TTL / pré-expiration ─────────────────────────────────
+    _dte_ctx = signal_dte_context or {}
+    _mp_dte   = _dte_ctx.get("max_pain_dte", 99)    # DTE du contrat max_pain dominant
+    _flip_dte = _dte_ctx.get("flip_top_dte", 99)    # DTE du contrat flip dominant
+    _min_dte  = min(_mp_dte, _flip_dte)             # DTE le plus court parmi les signaux clés
+
+    # Facteur de décroissance TTL : 1.0 si DTE > 3, décroît jusqu'à 0 à DTE=0
+    if _min_dte <= 0:
+        _ttl_factor = 0.0      # expiré → signal invalide
+    elif _min_dte == 1:
+        _ttl_factor = 0.25     # J-expiration → signal très dégradé
+    elif _min_dte <= 3:
+        _ttl_factor = 0.55     # pré-expiration → signal modérément dégradé
+    else:
+        _ttl_factor = 1.0      # signal normal
+
+    _pre_expiration_warning = None
+    _signal_dte_degraded = False
+    if _ttl_factor < 1.0:
+        _signal_dte_degraded = True
+        _expiry_label = f"J-{_min_dte}" if _min_dte > 0 else "J-expiration"
+        _pre_expiration_warning = (
+            f"Signal piloté par un contrat {_expiry_label} — "
+            f"structure GEX/flip à réévaluer après l'expiration. "
+            f"Thesis basée sur une structure à court terme uniquement."
+        )
+
     # ── 2. Collecter les signaux actifs et les raisons d'exclusion ─────────
     range_mode = narrative_data.get("range_mode", False)
     asymmetric_side = narrative_data.get("asymmetric_side", "NEUTRAL")
@@ -288,20 +336,35 @@ def compute_decision(
     # GEX
     if gex_use_in_signal:
         gex_regime = narrative_data.get("gex_regime", "NEUTRE")
-        if gex_regime == "AMPLIFICATEUR":
-            signals_used.append({
+        # P4 — Décroissance TTL : si contrat dominant expire bientôt, dégrader le poids GEX
+        _gex_weight = "élevé"
+        _gex_ttl_note = ""
+        if _ttl_factor <= 0.0:
+            # Signal GEX piloté par un contrat expiré → ignorer
+            signals_ignored.append({
                 "name": "GEX",
-                "direction": "AMPLIFICATEUR",
-                "detail": "Régime amplificateur actif",
-                "weight": "élevé",
+                "reason": f"Contrat dominant expiré (DTE {_min_dte}) — signal invalide jusqu'au renouvellement",
             })
-        elif gex_regime == "STABILISANT":
-            signals_used.append({
-                "name": "GEX",
-                "direction": "RANGE",
-                "detail": "Régime stabilisant — compression",
-                "weight": "élevé",
-            })
+            gex_use_in_signal = False
+        elif _ttl_factor < 1.0:
+            _gex_weight = "faible" if _ttl_factor <= 0.25 else "modéré"
+            _gex_ttl_note = f" [⚠ J-{_min_dte} — structure à réévaluer post-expiration]"
+
+        if gex_use_in_signal:
+            if gex_regime == "AMPLIFICATEUR":
+                signals_used.append({
+                    "name": "GEX",
+                    "direction": "AMPLIFICATEUR",
+                    "detail": f"Régime amplificateur actif{_gex_ttl_note}",
+                    "weight": _gex_weight,
+                })
+            elif gex_regime == "STABILISANT":
+                signals_used.append({
+                    "name": "GEX",
+                    "direction": "RANGE",
+                    "detail": f"Régime stabilisant — compression{_gex_ttl_note}",
+                    "weight": _gex_weight,
+                })
     else:
         signals_ignored.append({
             "name": "GEX",
@@ -344,6 +407,59 @@ def compute_decision(
         "name": "Neural (MLP + GRU)",
         "reason": "LAB ONLY — validation insuffisante. Non utilisés dans la décision.",
     })
+
+    # P2 — Directional Bias (-100 → +100) : signal souverain si |score| ≥ 70
+    # P4 — Dégradé par TTL si contrat GEX dominant expire bientôt (DB est partiellement GEX-driven)
+    _db_score = directional_bias_score if directional_bias_score is not None else 0.0
+    _db_ttl_note = f" [⚠ J-{_min_dte} — partiellement piloté par contrat expirant]" if _signal_dte_degraded else ""
+    if directional_bias_score is not None:
+        if abs(_db_score) >= 70:
+            _db_dir = "UP" if _db_score > 0 else "DOWN"
+            # P4 : si DTE très court, rétrograder de "élevé" à "modéré"
+            _db_weight = ("modéré" if _ttl_factor <= 0.25 else "élevé") if _signal_dte_degraded else "élevé"
+            signals_used.append({
+                "name": "Directional Bias",
+                "direction": _db_dir,
+                "detail": f"Biais directionnel fort ({_db_score:+.0f}/100){_db_ttl_note}",
+                "weight": _db_weight,
+            })
+        elif abs(_db_score) >= 40:
+            _db_dir = "UP" if _db_score > 0 else "DOWN"
+            _db_weight = "faible" if _signal_dte_degraded else "modéré"
+            signals_used.append({
+                "name": "Directional Bias",
+                "direction": _db_dir,
+                "detail": f"Biais directionnel modéré ({_db_score:+.0f}/100){_db_ttl_note}",
+                "weight": _db_weight,
+            })
+        else:
+            signals_ignored.append({
+                "name": "Directional Bias",
+                "reason": f"Biais faible ({_db_score:+.0f}/100) — sous le seuil d'action (±40)",
+            })
+
+    # P3 — Probability Engine : signal contributif si écart > seuil (|prob - 50| > 7pts)
+    _pe_threshold = 7.0  # points au-dessus de 50 pour être contributif
+    if pe_dominant_probability is not None and pe_dominant_direction is not None:
+        _pe_edge = abs(pe_dominant_probability - 50.0)
+        if _pe_edge > _pe_threshold:
+            _pe_signal_dir = "UP" if pe_dominant_direction == "BULL" else "DOWN"
+            signals_used.append({
+                "name": "Probability Engine",
+                "direction": _pe_signal_dir,
+                "detail": f"Règles options : {pe_dominant_direction} {pe_dominant_probability:.0f}% (edge {_pe_edge:+.0f} pts)",
+                "weight": "modéré" if _pe_edge >= 12 else "faible",
+            })
+        else:
+            signals_ignored.append({
+                "name": "Probability Engine",
+                "reason": f"Probabilité {pe_dominant_probability:.0f}% — équilibre (edge {_pe_edge:+.1f} pts sous seuil {_pe_threshold})",
+            })
+    else:
+        signals_ignored.append({
+            "name": "Probability Engine",
+            "reason": "Données PE non disponibles pour cet appel",
+        })
 
     # V5 — VEX/CEX regime signal
     regime_mods = _get_regime_modifiers(vexcex_regime_id, vexcex_urgency, vexcex_phase)
@@ -483,11 +599,43 @@ def compute_decision(
         confidence_pct = 15
 
     # ── 5. Modifieurs de confiance ─────────────────────────────────────────
+    # P2 — Directional Bias renforce la confiance quand cohérent avec le verdict
+    if directional_bias_score is not None and verdict in ("SIGNAL_UP", "SIGNAL_DOWN"):
+        _db_dir_verdict = "UP" if verdict == "SIGNAL_UP" else "DOWN"
+        _db_dir_signal  = "UP" if _db_score > 0 else "DOWN"
+        if _db_dir_verdict == _db_dir_signal:
+            # Signal cohérent : boost proportionnel à l'intensité du biais
+            if abs(_db_score) >= 70:
+                confidence_pct = min(100, confidence_pct + 15)
+            elif abs(_db_score) >= 40:
+                confidence_pct = min(100, confidence_pct + 8)
+        else:
+            # Signal divergent : dégrader la confiance
+            confidence_pct = max(0, confidence_pct - 15)
+
     # Arena
     if arena_status == "NO_EDGE":
         confidence_pct = min(confidence_pct, 30)
     elif arena_status == "LEADER_CLEAR" and arena_leader_wr and arena_leader_wr > 0.55:
         confidence_pct = min(100, confidence_pct + 10)
+
+    # P3 — Probability Engine : modifier si signal cohérent/divergent avec verdict
+    if pe_dominant_probability is not None and pe_dominant_direction is not None and verdict in ("SIGNAL_UP", "SIGNAL_DOWN"):
+        _pe_verdict_dir = "BULL" if verdict == "SIGNAL_UP" else "BEAR"
+        _pe_edge = abs(pe_dominant_probability - 50.0)
+        if pe_dominant_direction == _pe_verdict_dir and _pe_edge > _pe_threshold:
+            # Cohérent : boost modeste (PE est un moteur de règles, pas backtestvvalidé)
+            _pe_boost = round(min(8, _pe_edge * 0.5))
+            confidence_pct = min(100, confidence_pct + _pe_boost)
+        elif pe_dominant_direction != _pe_verdict_dir and _pe_edge > _pe_threshold:
+            # Divergent : légère dégradation
+            confidence_pct = max(0, confidence_pct - 5)
+
+    # P4 — TTL : décroissance pré-expiration appliquée à la confiance finale
+    if _signal_dte_degraded:
+        # Pénalité proportionnelle au facteur TTL : TTL=0.25 → -20pts, TTL=0.55 → -10pts
+        _ttl_penalty = round((1.0 - _ttl_factor) * 25)
+        confidence_pct = max(0, confidence_pct - _ttl_penalty)
 
     # V5 — VEX/CEX regime modifiers (seulement si pas forced_verdict déjà appliqué)
     if not forced_verdict:
@@ -569,4 +717,10 @@ def compute_decision(
         vexcex_contribution=regime_mods.get("contribution"),
         state=state,
         action=action,
+        directional_bias_score=directional_bias_score,
+        pe_dominant_direction=pe_dominant_direction,
+        pe_dominant_probability=pe_dominant_probability,
+        global_confidence=confidence_pct,  # P3 — alias source de vérité unique
+        pre_expiration_warning=_pre_expiration_warning,  # P4
+        signal_dte_degraded=_signal_dte_degraded,        # P4
     )
