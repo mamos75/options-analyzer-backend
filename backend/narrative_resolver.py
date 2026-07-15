@@ -39,6 +39,85 @@ from .directional_bias import DirectionalBias, compute_directional_bias
 from .options_walls import OptionsWall as _OptionsWall
 
 
+# ── Config convergence ──────────────────────────────────────────────────────────
+CONVERGENCE_TOLERANCE_PCT: float = 0.015   # ±1.5% — même seuil que frontend CFG.LEVELS_NEAR_THRESH
+
+
+@dataclass
+class ConvergenceResult:
+    """Résultat de detect_convergence() — niveaux convergents avec leurs types réels."""
+    converging: bool                 # True si >=2 niveaux convergent
+    count: int                       # nombre de niveaux convergents
+    center: float | None             # prix de référence (max_pain prioritaire)
+    types: list                      # types réels : ["flip", "max_pain", "call_wall", "put_wall", "atm"]
+    labels: list                     # labels humains correspondants
+    tolerance_pct: float             # tolérance utilisée
+
+
+def detect_convergence(
+    levels: dict,
+    tolerance_pct: float = CONVERGENCE_TOLERANCE_PCT,
+) -> ConvergenceResult:
+    """Détecte les niveaux convergents avec leur type réel.
+
+    Args:
+        levels: dict {type_cle -> prix} — types reconnus :
+            "flip", "max_pain", "call_wall", "put_wall", "atm"
+        tolerance_pct: tolérance relative (défaut = CONVERGENCE_TOLERANCE_PCT)
+
+    Returns:
+        ConvergenceResult avec les niveaux convergents et leurs types réels.
+    """
+    # Ordre de priorité pour le centre de référence
+    PRIORITY = ["max_pain", "flip", "call_wall", "put_wall", "atm"]
+    LABELS = {
+        "flip":      "Gamma Flip",
+        "max_pain":  "Max Pain",
+        "call_wall": "Call wall",
+        "put_wall":  "Put wall",
+        "atm":       "ATM",
+    }
+
+    # Filtrer les niveaux définis
+    defined = {k: v for k, v in levels.items() if v is not None and v > 0}
+    if len(defined) < 2:
+        return ConvergenceResult(
+            converging=False, count=len(defined),
+            center=None, types=[], labels=[],
+            tolerance_pct=tolerance_pct,
+        )
+
+    # Choisir le centre de référence par priorité
+    center = None
+    for key in PRIORITY:
+        if key in defined:
+            center = defined[key]
+            break
+    if center is None:
+        center = list(defined.values())[0]
+
+    # Trouver tous les niveaux dans la tolérance du centre
+    converging_types = []
+    converging_labels = []
+    for key in PRIORITY:  # ordre fixe pour la cohérence des labels
+        if key not in defined:
+            continue
+        price = defined[key]
+        if abs(price - center) / center <= tolerance_pct:
+            converging_types.append(key)
+            converging_labels.append(LABELS.get(key, key))
+
+    return ConvergenceResult(
+        converging=len(converging_types) >= 2,
+        count=len(converging_types),
+        center=center,
+        types=converging_types,
+        labels=converging_labels,
+        tolerance_pct=tolerance_pct,
+    )
+
+
+
 def select_levels(walls_global, spot: float) -> dict:
     """Sélecteur de niveaux unifié — F11.1.
 
@@ -119,6 +198,10 @@ class NarrativeResolved:
     # F8.4 — Echelle des niveaux (ladders)
     upside_ladder: list = field(default_factory=list)   # [{price, types, oi, dist_pct, tag}]
     downside_ladder: list = field(default_factory=list)
+    # Phase 2 Sprint 3 — types réels des niveaux
+    niveau_haut_type: str = ""         # flip | call_wall | put_wall | atm | gravity | fallback
+    niveau_bas_type: str = ""          # flip | call_wall | put_wall | atm | gravity | fallback
+    convergence: object = None          # ConvergenceResult depuis detect_convergence()
 
 
 
@@ -476,24 +559,14 @@ def resolve_narrative(
             "dte": mp_near.dte,
             "label": f"Cible {mp_near.expiry} (J-{mp_near.dte}) : ${mp_near.strike:,.0f}",
         }
-        # Détecter et signaler si near ≠ institutional (information, pas contradiction)
-        if mp_inst and abs(mp_inst.strike - mp_near.strike) > 500:
-            contradictions.append({
-                "widget": "Max Pain",
-                "detail": (
-                    f"Near-term {mp_near.expiry} → ${mp_near.strike:,.0f} "
-                    f"vs institutionnel {mp_inst.expiry} → ${mp_inst.strike:,.0f} "
-                    f"— deux expiries différentes, pas une contradiction"
-                ),
-                "resolution": f"Afficher ${mp_near.strike:,.0f} ({mp_near.expiry}) comme cible principale",
-            })
+        # Note: near != institutional = deux horizons normaux, pas une contradiction
     else:
-        mp_strike = round(gex.max_pain, 0)
+        mp_strike_fallback = round(gex.max_pain, 0)
         max_pain_display = {
-            "strike": mp_strike,
+            "strike": mp_strike_fallback,
             "expiry": "?",
             "dte": 0,
-            "label": f"${mp_strike:,.0f}",
+            "label": f"${mp_strike_fallback:,.0f}",
         }
 
     # ── Range mode ────────────────────────────────────────────────────────
@@ -612,6 +685,18 @@ def resolve_narrative(
         flip_use_in_signal=flip_use_in_signal_val,
     )
 
+    # ── Types réels des niveaux + detect_convergence ─────────────────────
+    niveau_haut_type = _infer_niveau_type(niveau_haut_label, niveau_haut, flip, spot)
+    niveau_bas_type  = _infer_niveau_type(niveau_bas_label, niveau_bas, flip, spot)
+    _cw_price = walls.major_call_wall if (walls and walls.major_call_wall and walls.major_call_wall > spot * 1.002) else None
+    _pw_price = walls.major_put_wall  if (walls and walls.major_put_wall  and walls.major_put_wall  < spot * 0.998) else None
+    _conv_result = detect_convergence({
+        "flip":      flip if flip else None,
+        "max_pain":  mp_strike if mp_strike else None,
+        "call_wall": _cw_price,
+        "put_wall":  _pw_price,
+    })
+
     # ── F8.4 — Ladders (upside / downside levels) ─────────────────────────
     _mp_dte = max_pain_display.get('dte', 99) if max_pain_display else 99
     upside_ladder, downside_ladder = _build_ladders(spot, flip, mp_strike, walls, _mp_dte)
@@ -727,6 +812,9 @@ def resolve_narrative(
         risk_matrix=risk_matrix,
         upside_ladder=upside_ladder,
         downside_ladder=downside_ladder,
+        niveau_haut_type=niveau_haut_type,
+        niveau_bas_type=niveau_bas_type,
+        convergence=_conv_result,
     )
 
 
@@ -770,6 +858,28 @@ def _compute_main_risk(
 
 def _is_dormant(center: float, dormant_strikes: set) -> bool:
     return any(abs(center - s) < 1 for s in dormant_strikes)
+
+
+def _infer_niveau_type(label: str, price: float, flip, spot: float) -> str:
+    """Infère le type réel d'un niveau depuis son label et sa position relative.
+
+    Types retournés : "flip" | "call_wall" | "put_wall" | "atm" | "gravity" | "fallback"
+    """
+    lbl = label.lower() if label else ""
+    if "flip" in lbl or "ligne rouge" in lbl or "régime bascule" in lbl or "bascule si" in lbl:
+        return "flip"
+    if flip is not None and abs(price - flip) / max(flip, 1) < 0.002:
+        return "flip"
+    if "call" in lbl:
+        return "call_wall"
+    if "put" in lbl:
+        return "put_wall"
+    if "atm" in lbl or "at_money" in lbl:
+        return "atm"
+    if "attraction" in lbl or "cible d'attraction" in lbl:
+        return "gravity"
+    # fallback : aucun tag exploitable
+    return "fallback"
 
 
 def _compute_niveau_haut(

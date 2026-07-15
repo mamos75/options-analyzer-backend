@@ -1334,6 +1334,18 @@ async def get_narrative():
         # F8.4 — Ladders
         "upside_ladder": narrative.upside_ladder,
         "downside_ladder": narrative.downside_ladder,
+        # Phase 2 Sprint 3 — types réels + convergence
+        "niveau_haut_type": getattr(narrative, "niveau_haut_type", ""),
+        "niveau_bas_type":  getattr(narrative, "niveau_bas_type", ""),
+        "convergence": (
+            {
+                "converging": narrative.convergence.converging,
+                "count":      narrative.convergence.count,
+                "center":     narrative.convergence.center,
+                "types":      narrative.convergence.types,
+                "labels":     narrative.convergence.labels,
+            } if getattr(narrative, "convergence", None) else None
+        ),
     }
 
 
@@ -1575,6 +1587,13 @@ async def get_decision():
         # P4 — TTL / pré-expiration
         "pre_expiration_warning": decision.pre_expiration_warning,
         "signal_dte_degraded": decision.signal_dte_degraded,
+    }
+    # Phase 2 -- contexte types niveaux pour assertion m2
+    _decision_payload["_niveau_types"] = {
+        "niveau_bas_type":  getattr(narrative, "niveau_bas_type", ""),
+        "niveau_haut_type": getattr(narrative, "niveau_haut_type", ""),
+        "flip_level":       gex.flip_level,
+        "max_pain":         _mp_strike_dec if "_mp_strike_dec" in dir() else None,
     }
     return run_coherence_checks(_decision_payload, "/api/decision")
 
@@ -3975,6 +3994,13 @@ async def get_pro_decision():
             asdict(decision),
             default=lambda o: o.__dict__ if hasattr(o, '__dict__') else str(o)
         ))
+        # Phase 2 -- contexte types niveaux pour assertion m2
+        _pro_payload["_niveau_types"] = {
+            "niveau_bas_type":  getattr(nar_obj, "niveau_bas_type", ""),
+            "niveau_haut_type": getattr(nar_obj, "niveau_haut_type", ""),
+            "flip_level":       gex_obj.flip_level,
+            "max_pain":         getattr(nar_obj, "max_pain_display", {}).get("strike") if getattr(nar_obj, "max_pain_display", None) else None,
+        }
         return run_coherence_checks(_pro_payload, "/api/pro_decision")
 
     except Exception as e:

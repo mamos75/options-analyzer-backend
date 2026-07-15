@@ -43,7 +43,7 @@ const _SYSTEM_COLOR = {
 // F8.7 — Supprime le préfixe prix "$XX,XXX — " des labels (le prix est déjà affiché en bold)
 const stripPrice = (lbl) => lbl ? lbl.replace(/^\$[\d,]+ — /, '') : lbl;
 
-export function buildLevelsContext(btcSpot, lvlFlip, lvlHaut, lvlBas, mpStrike, mpDte, mpExpiry, flipDistPct, vexBull, cexBull, lvlHautLbl, lvlBasLbl, walls) {
+export function buildLevelsContext(btcSpot, lvlFlip, lvlHaut, lvlBas, mpStrike, mpDte, mpExpiry, flipDistPct, vexBull, cexBull, lvlHautLbl, lvlBasLbl, walls, convResult, gexRegime) {
   const fmtP = v => v ? '$' + Math.round(v).toLocaleString() : null;
   const lines = [];
   const THRESH = CFG.LEVELS_NEAR_THRESH;
@@ -62,41 +62,41 @@ export function buildLevelsContext(btcSpot, lvlFlip, lvlHaut, lvlBas, mpStrike, 
   );
   if (roles.length) lines.push(roles.join('<br>'));
 
-  // ── 2. Convergence triple ────────────────────────────────────────────
-  const allLevels = [lvlFlip, mpStrike, lvlHaut, lvlBas].filter(Boolean);
-  const refPrice  = mpStrike || lvlFlip;
-  const convergingCount = refPrice
-    ? allLevels.filter(l => Math.abs(l - refPrice) / refPrice < THRESH).length
-    : 0;
-
-  const flipNearMp   = near(lvlFlip, mpStrike);
-  const flipNearBas  = near(lvlFlip, lvlBas);
-  const flipNearHaut = near(lvlFlip, lvlHaut);
-  const mpNearBas    = near(mpStrike, lvlBas);
-  const mpNearHaut   = near(mpStrike, lvlHaut);
-  const hautNearBas  = near(lvlHaut, lvlBas);
-
-  if (convergingCount >= 3 && refPrice) {
-    const dteTxt = mpDte === 0 ? 'aujourd\'hui' : mpDte === 1 ? 'demain' : mpDte !== null ? 'dans ' + mpDte + 'j' : '';
-    const expTxt = mpExpiry ? ' (' + mpExpiry + ')' : '';
-    lines.push(
-      '&#9888;&#65039; <b>Convergence triple</b> autour de ' + fmtP(refPrice) + ' : Gamma Flip + Max Pain + ' +
-      (flipNearBas ? (stripPrice(lvlBasLbl) || 'Support') : (stripPrice(lvlHautLbl) || 'Résistance')) + ' sont tous dans la même zone. ' +
-      (dteTxt ? 'Expiration ' + dteTxt + expTxt + ' — ' : '') +
-      'le GEX remonte mécaniquement vers zéro car les déalers dénouent leurs positions avant fixing. ' +
-      'Ce n\'est <b>pas un signal bull</b> : c\'est le marché qui gravite vers son point d\'expiration naturel.'
-    );
-  } else if (convergingCount === 2 && refPrice) {
-    const which = flipNearMp   ? 'Gamma Flip et Max Pain' :
-                  flipNearBas  ? 'Gamma Flip et ' + (stripPrice(lvlBasLbl) || 'Support') :
-                  flipNearHaut ? 'Gamma Flip et ' + (stripPrice(lvlHautLbl) || 'Résistance') :
-                  mpNearBas    ? 'Max Pain et ' + (stripPrice(lvlBasLbl) || 'Support') :
-                  mpNearHaut   ? 'Max Pain et ' + (stripPrice(lvlHautLbl) || 'Résistance') :
-                  hautNearBas  ? 'Call wall et Put wall (compression)' : 'deux niveaux clés';
-    lines.push(
-      '&#128204; ' + which + ' convergent en ' + fmtP(refPrice) + '. ' +
-      'Cette confluence renforce l\'importance de ce niveau comme pivot — une cassure franche dans un sens déclenchera un mouvement plus ample qu\'un niveau isolé.'
-    );
+  // ── 2. Convergence — depuis types réels backend (Phase 2 Sprint 3) ──────
+  // convResult = { converging, count, center, types, labels } | null
+  if (convResult && convResult.converging && convResult.count >= 2 && convResult.center) {
+    const refPrice  = convResult.center;
+    const typesLbls = convResult.labels || [];
+    const dteTxt    = mpDte === 0 ? "aujourd\'hui" : mpDte === 1 ? 'demain' : mpDte !== null ? 'dans ' + mpDte + 'j' : '';
+    const expTxt    = mpExpiry ? ' (' + mpExpiry + ')' : '';
+    const typesSep  = typesLbls.join(' + ');
+    if (convResult.count >= 3) {
+      lines.push(
+        '&#9888;&#65039; <b>Convergence ' + convResult.count + ' niveaux</b> autour de ' + fmtP(refPrice) +
+        ' : ' + typesSep + ' sont tous dans la même zone. ' +
+        (dteTxt ? 'Expiration ' + dteTxt + expTxt + ' — ' : '') +
+        'le GEX remonte mécaniquement vers zéro car les dealers dénouent leurs positions avant fixing. ' +
+        'Ce n\'est <b>pas un signal bull</b> : c\'est le marché qui gravite vers son point d\'expiration naturel.'
+      );
+    } else {
+      lines.push(
+        '&#128204; <b>' + typesSep + '</b> convergent en ' + fmtP(refPrice) + '. ' +
+        'Cette confluence renforce l\'importance de ce niveau comme pivot — une cassure franche dans un sens déclenchera un mouvement plus ample qu\'un niveau isolé.'
+      );
+    }
+  } else if (!convResult) {
+    // Fallback local si convResult absent (compatibilité)
+    const allLevels = [lvlFlip, mpStrike, lvlHaut, lvlBas].filter(Boolean);
+    const refPrice  = mpStrike || lvlFlip;
+    const convergingCount = refPrice
+      ? allLevels.filter(l => Math.abs(l - refPrice) / refPrice < THRESH).length
+      : 0;
+    if (convergingCount >= 2 && refPrice) {
+      lines.push(
+        '&#128204; <b>Convergence ' + convergingCount + ' niveaux</b> autour de ' + fmtP(refPrice) + '. ' +
+        'Cette confluence renforce l\'importance de ce niveau comme pivot.'
+      );
+    }
   }
 
   // ── 3. Divergence Flip / Max Pain (de part et d'autre du spot) ───────
@@ -117,36 +117,63 @@ export function buildLevelsContext(btcSpot, lvlFlip, lvlHaut, lvlBas, mpStrike, 
     }
   }
 
-  // ── 4. Position du spot par rapport aux niveaux ──────────────────────
+  // ── 4. Position du spot par rapport au flip — templates par régime GEX ──
+  // Phase 2 Sprint 3 : ZONE_DE_FLIP = conditionnel, pas affirmatif
   if (btcSpot && lvlFlip) {
     const aboveFlip   = btcSpot > lvlFlip;
     const distFlipPct = (Math.abs(btcSpot - lvlFlip) / btcSpot * 100).toFixed(1);
+    const isZoneFlip  = (gexRegime === 'ZONE_DE_FLIP');
+    const isStab      = (gexRegime === 'STABILISANT');
+    const isAmpli     = (gexRegime === 'AMPLIFICATEUR');
+
     if (parseFloat(distFlipPct) < 2) {
-      lines.push(
-        '&#128293; BTC (' + fmtP(Math.round(btcSpot)) + ') est à seulement ' + distFlipPct + '% du Gamma Flip. ' +
-        (aboveFlip
-          ? 'Tant que le spot tient <b>au-dessus</b> de ' + fmtP(lvlFlip) + ', le GEX reste stabilisateur. ' +
-            'Une clôture <b>sous</b> ' + fmtP(lvlFlip) + ' active le régime amplificateur — les dealers vendent mécaniquement.'
-          : 'Le spot est <b>en dessous</b> du Flip. Les dealers sont en mode amplificateur. ' +
-            'Un retour <b>au-dessus</b> de ' + fmtP(lvlFlip) + ' inverserait le régime et déclencherait des rachats mécaniques.')
-      );
+      let flipTxt;
+      if (isZoneFlip) {
+        // ZONE_DE_FLIP — comportement dealer indéterminé, conditionnel
+        flipTxt = 'BTC (' + fmtP(Math.round(btcSpot)) + ') est à ' + distFlipPct + '% du Gamma Flip ' + fmtP(lvlFlip) + '. ' +
+          'Comportement dealer indéterminé — le régime bascule selon le côté du flip. ' +
+          'Clôture <b>au-dessus</b> : régime stabilisateur probable. ' +
+          'Clôture <b>en dessous</b> : régime amplificateur probable.';
+      } else if (aboveFlip) {
+        flipTxt = 'BTC (' + fmtP(Math.round(btcSpot)) + ') est à seulement ' + distFlipPct + '% du Gamma Flip ' + fmtP(lvlFlip) + ' (au-dessus). ' +
+          'Tant que le spot tient <b>au-dessus</b>, le GEX reste stabilisateur. ' +
+          'Une clôture <b>sous</b> ' + fmtP(lvlFlip) + ' activerait le régime amplificateur.';
+      } else {
+        flipTxt = 'BTC (' + fmtP(Math.round(btcSpot)) + ') est à seulement ' + distFlipPct + '% du Gamma Flip ' + fmtP(lvlFlip) + ' (en dessous). ' +
+          'Le spot est en régime amplificateur. ' +
+          'Un retour <b>au-dessus</b> de ' + fmtP(lvlFlip) + ' inverserait le régime et déclencherait des rachats mécaniques.';
+      }
+      lines.push('&#128293; ' + flipTxt);
     } else if (parseFloat(distFlipPct) < 5) {
-      lines.push(
-        '&#128204; BTC (' + fmtP(Math.round(btcSpot)) + ') est à ' + distFlipPct + '% du Gamma Flip ' + fmtP(lvlFlip) + '. ' +
-        (aboveFlip
-          ? 'Zone de vigilance : le régime stabilisateur tient, mais toute poussée vendeuse brève pourrait inverser la mécanique des dealers.'
-          : 'Zone de vigilance : le régime amplificateur actif, mais un retour rapide au-dessus du Flip inverserait la mécanique.')
-      );
+      let flipTxt;
+      if (isZoneFlip) {
+        flipTxt = 'BTC (' + fmtP(Math.round(btcSpot)) + ') est à ' + distFlipPct + '% du Gamma Flip ' + fmtP(lvlFlip) + '. ' +
+          'Zone de vigilance : comportement dealer non déterminé — le régime peut basculer dans les deux sens selon la direction du prochain move.';
+      } else if (aboveFlip) {
+        flipTxt = 'BTC (' + fmtP(Math.round(btcSpot)) + ') est à ' + distFlipPct + '% du Gamma Flip ' + fmtP(lvlFlip) + ' (au-dessus). ' +
+          'Zone de vigilance : le régime stabilisateur tient, mais une poussée vendeuse pourrait inverser la mécanique des dealers.';
+      } else {
+        flipTxt = 'BTC (' + fmtP(Math.round(btcSpot)) + ') est à ' + distFlipPct + '% du Gamma Flip ' + fmtP(lvlFlip) + ' (en dessous). ' +
+          'Zone de vigilance : régime amplificateur actif, mais un retour rapide au-dessus du flip inverserait la mécanique.';
+      }
+      lines.push('&#128204; ' + flipTxt);
     }
   }
 
-  // ── 5. Spot entre Flip et Call wall (pocket haussière) ────────────────
+  // ── 5. Spot entre Flip et résistance (pocket haussière) — par régime ───
+  // Phase 2 Sprint 3 : ZONE_DE_FLIP = conditionnel, jamais affirmatif
   if (btcSpot && lvlFlip && lvlHaut && btcSpot > lvlFlip && btcSpot < lvlHaut) {
-    const roomPct = ((lvlHaut - btcSpot) / btcSpot * 100).toFixed(1);
-    lines.push(
-      '&#128204; BTC est dans la <b>pocket haussière</b> : au-dessus du Flip (' + fmtP(lvlFlip) + ') et sous la résistance (' + fmtP(lvlHaut) + '). ' +
-      'Espace libre de ' + roomPct + '% avant le Call wall — les dealers sont stabilisateurs dans cette zone.'
-    );
+    const roomPct    = ((lvlHaut - btcSpot) / btcSpot * 100).toFixed(1);
+    const isZoneFlip = (gexRegime === 'ZONE_DE_FLIP');
+    let pocketTxt;
+    if (isZoneFlip) {
+      pocketTxt = 'BTC est dans la <b>pocket haussière</b> : au-dessus du Flip (' + fmtP(lvlFlip) + ') et sous la résistance (' + fmtP(lvlHaut) + '). ' +
+        'Espace libre de ' + roomPct + '% avant la résistance — comportement dealer indéterminé dans cette zone, bascule possible des deux côtés.';
+    } else {
+      pocketTxt = 'BTC est dans la <b>pocket haussière</b> : au-dessus du Flip (' + fmtP(lvlFlip) + ') et sous la résistance (' + fmtP(lvlHaut) + '). ' +
+        'Espace libre de ' + roomPct + '% avant le Call wall — les dealers sont stabilisateurs dans cette zone.';
+    }
+    lines.push('&#128204; ' + pocketTxt);
   }
 
   // ── 6. Spot entre Put wall et Flip (pocket baissier) ─────────────────
@@ -165,7 +192,9 @@ export function buildLevelsContext(btcSpot, lvlFlip, lvlHaut, lvlBas, mpStrike, 
     }
     lines.push(
       '&#9888;&#65039; BTC est dans la <b>zone de pression</b> : sous le Flip (' + fmtP(lvlFlip) + ') et au-dessus du support (' + fmtP(lvlBas) + '). ' +
-      'Coussin de ' + roomPct + '% avant le Put wall — les dealers amplifient les mouvements dans cette zone.' + _atmLine
+      ((gexRegime === 'ZONE_DE_FLIP')
+        ? 'Coussin de ' + roomPct + '% avant le support — comportement dealer indéterminé dans cette zone, bascule selon le côté du flip.' + _atmLine
+        : 'Coussin de ' + roomPct + '% avant le Put wall — les dealers amplifient les mouvements dans cette zone.' + _atmLine)
     );
   }
 
@@ -372,12 +401,15 @@ export async function loadRegimeSummary(signal) {
       </div>
 
       ${(() => {
+        const convResult = narrData?.convergence || null;
+        const gexRegimeFull = vcData.gamma_flip_regime || null;
         const ctx = buildLevelsContext(
           btcSpot, lvlFlip, lvlHaut, lvlBas,
           mpStrike, mpDte, mpExpiry,
           vcData.gamma_flip_dist_pct,
           vexBull, cexBull,
-          lvlHautLbl, lvlBasLbl, walls
+          lvlHautLbl, lvlBasLbl, walls,
+          convResult, gexRegimeFull
         );
         return ctx
           ? `<div style="font-size:12px;color:#c9d1e0;line-height:1.85;margin-bottom:14px;padding:14px 16px;background:rgba(255,255,255,0.03);border-radius:10px;border-left:3px solid #475569">${ctx}</div>`
