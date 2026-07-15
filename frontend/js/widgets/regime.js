@@ -81,17 +81,17 @@ export function buildLevelsContext(btcSpot, lvlFlip, lvlHaut, lvlBas, mpStrike, 
     const expTxt = mpExpiry ? ' (' + mpExpiry + ')' : '';
     lines.push(
       '&#9888;&#65039; <b>Convergence triple</b> autour de ' + fmtP(refPrice) + ' : Gamma Flip + Max Pain + ' +
-      (flipNearBas ? 'Put wall' : 'Call wall') + ' sont tous dans la même zone. ' +
+      (flipNearBas ? (stripPrice(lvlBasLbl) || 'Support') : (stripPrice(lvlHautLbl) || 'Résistance')) + ' sont tous dans la même zone. ' +
       (dteTxt ? 'Expiration ' + dteTxt + expTxt + ' — ' : '') +
       'le GEX remonte mécaniquement vers zéro car les déalers dénouent leurs positions avant fixing. ' +
       'Ce n\'est <b>pas un signal bull</b> : c\'est le marché qui gravite vers son point d\'expiration naturel.'
     );
   } else if (convergingCount === 2 && refPrice) {
     const which = flipNearMp   ? 'Gamma Flip et Max Pain' :
-                  flipNearBas  ? 'Gamma Flip et Put wall' :
-                  flipNearHaut ? 'Gamma Flip et Call wall' :
-                  mpNearBas    ? 'Max Pain et Put wall' :
-                  mpNearHaut   ? 'Max Pain et Call wall' :
+                  flipNearBas  ? 'Gamma Flip et ' + (stripPrice(lvlBasLbl) || 'Support') :
+                  flipNearHaut ? 'Gamma Flip et ' + (stripPrice(lvlHautLbl) || 'Résistance') :
+                  mpNearBas    ? 'Max Pain et ' + (stripPrice(lvlBasLbl) || 'Support') :
+                  mpNearHaut   ? 'Max Pain et ' + (stripPrice(lvlHautLbl) || 'Résistance') :
                   hautNearBas  ? 'Call wall et Put wall (compression)' : 'deux niveaux clés';
     lines.push(
       '&#128204; ' + which + ' convergent en ' + fmtP(refPrice) + '. ' +
@@ -140,11 +140,11 @@ export function buildLevelsContext(btcSpot, lvlFlip, lvlHaut, lvlBas, mpStrike, 
     }
   }
 
-  // ── 5. Spot entre Flip et Call wall (pocket haussier) ────────────────
+  // ── 5. Spot entre Flip et Call wall (pocket haussière) ────────────────
   if (btcSpot && lvlFlip && lvlHaut && btcSpot > lvlFlip && btcSpot < lvlHaut) {
     const roomPct = ((lvlHaut - btcSpot) / btcSpot * 100).toFixed(1);
     lines.push(
-      '&#128204; BTC est dans la <b>pocket haussier</b> : au-dessus du Flip (' + fmtP(lvlFlip) + ') et sous la résistance (' + fmtP(lvlHaut) + '). ' +
+      '&#128204; BTC est dans la <b>pocket haussière</b> : au-dessus du Flip (' + fmtP(lvlFlip) + ') et sous la résistance (' + fmtP(lvlHaut) + '). ' +
       'Espace libre de ' + roomPct + '% avant le Call wall — les dealers sont stabilisateurs dans cette zone.'
     );
   }
@@ -252,7 +252,7 @@ export async function loadRegimeSummary(signal) {
     const label     = decisionData?.vexcex_label     || 'SIGNAUX FAIBLES';
     const verdict   = decisionData?.verdict          || 'OBSERVE';
     const sysStatus = decisionData?.system_status    || 'OBSERVE';
-    const confPct   = decisionData?.confidence_pct   ?? 0;
+    const confPct   = decisionData?.global_confidence ?? decisionData?.confidence_pct ?? 0;
     const phrase    = decisionData?.phrase           || '';
 
     const phaseColor   = _PHASE_COLOR[phase]        || '#64748b';
@@ -384,8 +384,6 @@ export async function loadRegimeSummary(signal) {
           : '';
       })()}
 
-      <div class="regime-plain-text">${esc(phrase)}</div>
-
       ${signalsUsed.length ? `
       <div style="margin-top:12px">
         <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:6px">Signaux actifs</div>
@@ -414,7 +412,7 @@ export async function loadRegimeSummary(signal) {
           </div>
           <div style="text-align:right">
             <div style="font-size:20px;font-weight:900;color:${_aCl}">${confPct}%</div>
-            <div style="font-size:10px;color:#64748b">confiance</div>
+            <div style="font-size:10px;color:#64748b">confiance globale</div>
           </div>
         </div>`;
       })()}

@@ -50,6 +50,7 @@ from .directional_bias import directional_bias_to_dict
 from .stats_edge import compute_stats_edge
 from .decision_arbiter import compute_decision as _compute_decision
 from .regime_vexcex_engine import classify_regime_vexcex, VexCexInputs as _VexCexInputs
+from .coherence_checks import run_coherence_checks, get_violations_summary as _get_violations_summary
 from .auth import router as auth_router, init_db as init_auth_db
 from .regime_engine import build_regime_engine_output, regime_engine_to_dict
 from .probability_engine import compute_probability_engine, probability_engine_to_dict
@@ -723,7 +724,7 @@ async def get_snapshot():
             "zones": [
                 {
                     "level": z.center, "strength": round(z.strength, 3),
-                    "type": z.zone_type, "label": z.label, "active": z.active,
+                    "type": z.zone_type, "label": z.label, "active": z.zone_type != "VOID",
                 }
                 for z in (gravity.zones if gravity else [])
             ],
@@ -1423,6 +1424,59 @@ async def get_decision():
     )
     _vexcex_regime_dec = classify_regime_vexcex(_vexcex_inputs_dec)
 
+    # P2 — Extraire le score Directional Bias pour l'Arbiter
+    _db_score_dec = None
+    if narrative.directional_bias is not None:
+        try:
+            _db_score_dec = float(narrative.directional_bias.score)
+        except Exception:
+            _db_score_dec = None
+
+    # P3 — Probability Engine : dominant direction + probability pour l'Arbiter
+    _pe_dir_dec = None
+    _pe_prob_dec = None
+    try:
+        _mp_near_dec = getattr(gex, "max_pain_near", None)
+        _mp_strike_dec = _mp_near_dec.strike if _mp_near_dec else 0.0
+        _mp_dte_dec = _mp_near_dec.dte if _mp_near_dec else 30
+        _bf_dec = binance_feed.get_cache() or {}
+        _dex_h_dec = compute_dex_levels(snapshot)
+        _pe_dec = compute_probability_engine(
+            spot=snapshot.btc_price,
+            gex_near=gex.gex_near,
+            flip_level=gex.flip_level,
+            flip_use_in_signal=getattr(flip_audit, "use_in_signal", False),
+            dex_direction=dp.direction,
+            dex_actionable_btc=abs(_dex_h_dec.actionable) if _dex_h_dec else 0.0,
+            iv_rank=mopi.iv_rank,
+            pc_ratio_near=mopi.pc_ratio_near,
+            put_wall=walls.major_put_wall or 0.0,
+            call_wall=walls.major_call_wall or 0.0,
+            max_pain_strike=_mp_strike_dec,
+            max_pain_dte=_mp_dte_dec,
+            funding_rate=_bf_dec.get("funding_rate"),
+            futures_oi=_bf_dec.get("futures_oi"),
+            futures_oi_prev=_bf_dec.get("futures_oi_prev"),
+            spot_volume_24h=_bf_dec.get("spot_volume_24h"),
+            spot_volume_7d_avg=_bf_dec.get("spot_volume_7d_avg"),
+            gex_regime=gex.regime_meca,
+            dex_score=(dp.pressure_pct + 100.0) / 2.0,
+        )
+        # Extraire la direction dominante 24h (horizon le plus opérationnel)
+        _pe_b24 = getattr(_pe_dec, "bull_24h", None)
+        _pe_bear24 = getattr(_pe_dec, "bear_24h", None)
+        _pb = getattr(_pe_b24, "probability", 50.0) if _pe_b24 else 50.0
+        _pbe = getattr(_pe_bear24, "probability", 50.0) if _pe_bear24 else 50.0
+        if abs(_pb - 50) > abs(_pbe - 50):
+            _pe_dir_dec = "BULL"
+            _pe_prob_dec = float(_pb)
+        else:
+            _pe_dir_dec = "BEAR"
+            _pe_prob_dec = float(_pbe)
+    except Exception:
+        _pe_dir_dec = None
+        _pe_prob_dec = None
+
     decision = _compute_decision(
         narrative_data=narrative_dict,
         arena_data=arena_health,
@@ -1434,6 +1488,15 @@ async def get_decision():
         vexcex_phase=_vexcex_regime_dec.phase,
         vexcex_urgency=_vexcex_regime_dec.urgency,
         vexcex_label=_vexcex_regime_dec.label,
+        directional_bias_score=_db_score_dec,
+        pe_dominant_direction=_pe_dir_dec,
+        pe_dominant_probability=_pe_prob_dec,
+        # P4 — DTE context pour décroissance TTL pré-expiration
+        signal_dte_context={
+            "max_pain_dte": narrative.max_pain_display.get("dte", 99) if narrative.max_pain_display else 99,
+            "flip_top_dte": (narrative.flip_top_contributors[0].get("dte", 99)
+                             if narrative.flip_top_contributors else 99),
+        },
     )
 
     # F8.6 + F9.2 — flip_zone : stabilité du gamma flip sur 6h avec rejet outliers (>5% médiane)
@@ -1475,7 +1538,7 @@ async def get_decision():
     except Exception:
         flip_zone = {"n": 0, "stable": True, "display": gex.flip_level, "outliers_rejected": []}
 
-    return {
+    _decision_payload = {
         "verdict": decision.verdict,
         "confidence": decision.confidence,
         "confidence_pct": decision.confidence_pct,
@@ -1503,6 +1566,235 @@ async def get_decision():
         "action": decision.action,
         # F8.6 — flip zone stability
         "flip_zone": flip_zone,
+        # P2 — directional bias score transmis à l'arbiter (pour debug / Pro cap)
+        "directional_bias_score": decision.directional_bias_score,
+        # P3 — échelle unifiée : source de vérité unique (= confidence_pct)
+        "global_confidence": decision.global_confidence,
+        "pe_dominant_direction": decision.pe_dominant_direction,
+        "pe_dominant_probability": decision.pe_dominant_probability,
+        # P4 — TTL / pré-expiration
+        "pre_expiration_warning": decision.pre_expiration_warning,
+        "signal_dte_degraded": decision.signal_dte_degraded,
+    }
+    return run_coherence_checks(_decision_payload, "/api/decision")
+
+
+
+@app.get("/api/decision/shadow")
+async def get_decision_shadow():
+    """P7 — Shadow mode : compare la décision Arbiter avec et sans P2/P3/P4.
+
+    Retourne un diff structuré :
+      - baseline  : Arbiter sans P2 (pas de DB score), sans P3 (pas de PE), sans P4 (pas de TTL)
+      - current   : Arbiter complet (P2+P3+P4 actifs)
+      - delta     : différence confidence_pct, verdict, action
+      - impact    : résumé lisible des deltas pour monitoring A/B silencieux
+
+    Usage : polling toutes les N minutes par un cron de monitoring.
+    """
+    try:
+        snapshot = await deribit.get_cached_snapshot()
+    except Exception as e:
+        raise HTTPException(502, f"Deribit error: {e}")
+
+    gex = compute_gex(snapshot)
+    mopi = compute_mopi(
+        snapshot, gex, iv_history_cache,
+        gex_near_cap=_gex_calibration_cache["cap_value"],
+        cap_mode=_gex_calibration_cache["cap_mode"],
+        saturation_rate_7d=_gex_calibration_cache.get("saturation_rate_7d"),
+    )
+    dp = compute_dealer_pressure(snapshot)
+    dex_levels = compute_dex_levels(snapshot)
+    _snap_near = _near_snapshot(snapshot)
+    _gex_near = compute_gex(_snap_near)
+    gmap = compute_gravity_map(_snap_near, _gex_near)
+    walls = compute_options_walls(_snap_near)
+    sq = compute_squeeze_score(snapshot, gex, dp, mopi.iv_rank)
+    audit = compute_gex_activity_audit(snapshot)
+    gravity_audit = compute_gravity_activity_audit(snapshot)
+    flip_audit = compute_flip_activity_audit(snapshot, gex.flip_level)
+    cal_diag = diag_gex_calibration(_gex_calibration_cache)
+    narrative = resolve_narrative(
+        mopi, gex, dp, gmap, walls, sq, snapshot.btc_price,
+        audit=audit, dex_levels=dex_levels, gravity_audit=gravity_audit,
+        flip_audit=flip_audit,
+        calibration_status=cal_diag.status,
+        calibration_reason_code=cal_diag.reason_code,
+    )
+
+    narrative_dict = {
+        "contradictions": narrative.contradictions,
+        "data_stale": deribit.data_stale,
+        "range_mode": narrative.range_mode,
+        "asymmetric_side": narrative.asymmetric_side,
+        "gex_regime": gex.regime_meca,
+        "dex_direction": dp.direction,
+        "dex_activity_context": narrative.dex_activity_context,
+        "dex_activity_label": narrative.dex_activity_label,
+        "upside_ladder": narrative.upside_ladder,
+        "downside_ladder": narrative.downside_ladder,
+        "niveau_haut": narrative.niveau_haut,
+        "niveau_bas": narrative.niveau_bas,
+    }
+
+    try:
+        arena_health = _model_arena.get_arena_health()
+    except Exception:
+        arena_health = None
+
+    try:
+        from .vex_cex import compute_vex_cex as _cvc_s
+        _vc_s = _cvc_s(snapshot)
+    except Exception:
+        _vc_s = None
+    _vexcex_inputs_s = _VexCexInputs(
+        vex=getattr(_vc_s, "vex_total", 0.0) or 0.0,
+        cex=getattr(_vc_s, "cex_total", 0.0) or 0.0,
+        gex=gex.total_gex,
+        dex=getattr(dp, "net_delta_usd", getattr(dp, "net_delta", 0.0)) or 0.0,
+        spot=snapshot.btc_price,
+        vex_direction=getattr(_vc_s, "vex_direction", None),
+        cex_direction=getattr(_vc_s, "cex_direction", None),
+        flip_level=gex.flip_level,
+        flip_dist_pct=(
+            (snapshot.btc_price - gex.flip_level) / snapshot.btc_price * 100
+            if gex.flip_level else None
+        ),
+        regime_meca=gex.regime_meca,
+        regime_source=gex.regime_source,
+        gex_flip_incoherent=gex.gex_flip_incoherent,
+    )
+    _vexcex_regime_s = classify_regime_vexcex(_vexcex_inputs_s)
+
+    _common_kwargs = dict(
+        narrative_data=narrative_dict,
+        arena_data=arena_health,
+        health_data={"live_outcomes": arena_health.get("live_outcomes", 0)} if arena_health else None,
+        flip_use_in_signal=narrative.flip_use_in_signal,
+        gex_use_in_signal=narrative.gex_use_in_signal,
+        dex_use_in_signal=narrative.dex_use_in_signal,
+        vexcex_regime_id=_vexcex_regime_s.regime_id,
+        vexcex_phase=_vexcex_regime_s.phase,
+        vexcex_urgency=_vexcex_regime_s.urgency,
+        vexcex_label=_vexcex_regime_s.label,
+    )
+
+    # ── Baseline : sans P2/P3/P4 ────────────────────────────────────────────
+    _base = _compute_decision(**_common_kwargs)
+
+    # ── P2 — DB score ───────────────────────────────────────────────────────
+    _db_score_s = None
+    if narrative.directional_bias is not None:
+        try:
+            _db_score_s = float(narrative.directional_bias.score)
+        except Exception:
+            pass
+
+    # ── P3 — PE dominant ────────────────────────────────────────────────────
+    _pe_dir_s = None
+    _pe_prob_s = None
+    try:
+        _mp_near_s = getattr(gex, "max_pain_near", None)
+        _mp_strike_s = _mp_near_s.strike if _mp_near_s else 0.0
+        _mp_dte_s = _mp_near_s.dte if _mp_near_s else 30
+        _bf_s = binance_feed.get_cache() or {}
+        _dex_h_s = compute_dex_levels(snapshot)
+        _pe_s = compute_probability_engine(
+            spot=snapshot.btc_price,
+            gex_near=gex.gex_near,
+            flip_level=gex.flip_level,
+            flip_use_in_signal=getattr(flip_audit, "use_in_signal", False),
+            dex_direction=dp.direction,
+            dex_actionable_btc=abs(_dex_h_s.actionable) if _dex_h_s else 0.0,
+            iv_rank=mopi.iv_rank,
+            pc_ratio_near=mopi.pc_ratio_near,
+            put_wall=walls.major_put_wall or 0.0,
+            call_wall=walls.major_call_wall or 0.0,
+            max_pain_strike=_mp_strike_s,
+            max_pain_dte=_mp_dte_s,
+            funding_rate=_bf_s.get("funding_rate"),
+            futures_oi=_bf_s.get("futures_oi"),
+            futures_oi_prev=_bf_s.get("futures_oi_prev"),
+            spot_volume_24h=_bf_s.get("spot_volume_24h"),
+            spot_volume_7d_avg=_bf_s.get("spot_volume_7d_avg"),
+            gex_regime=gex.regime_meca,
+            dex_score=(dp.pressure_pct + 100.0) / 2.0,
+        )
+        _pe_b24_s = getattr(_pe_s, "bull_24h", None)
+        _pe_bear24_s = getattr(_pe_s, "bear_24h", None)
+        _pb_s = getattr(_pe_b24_s, "probability", 50.0) if _pe_b24_s else 50.0
+        _pbe_s = getattr(_pe_bear24_s, "probability", 50.0) if _pe_bear24_s else 50.0
+        if abs(_pb_s - 50) > abs(_pbe_s - 50):
+            _pe_dir_s = "BULL"
+            _pe_prob_s = float(_pb_s)
+        else:
+            _pe_dir_s = "BEAR"
+            _pe_prob_s = float(_pbe_s)
+    except Exception:
+        pass
+
+    # ── P4 — DTE context ────────────────────────────────────────────────────
+    _dte_ctx_s = {
+        "max_pain_dte": narrative.max_pain_display.get("dte", 99) if narrative.max_pain_display else 99,
+        "flip_top_dte": (narrative.flip_top_contributors[0].get("dte", 99)
+                         if narrative.flip_top_contributors else 99),
+    }
+
+    # ── Current : P2+P3+P4 actifs ───────────────────────────────────────────
+    _curr = _compute_decision(
+        **_common_kwargs,
+        directional_bias_score=_db_score_s,
+        pe_dominant_direction=_pe_dir_s,
+        pe_dominant_probability=_pe_prob_s,
+        signal_dte_context=_dte_ctx_s,
+    )
+
+    # ── Delta ────────────────────────────────────────────────────────────────
+    _conf_delta = _curr.confidence_pct - _base.confidence_pct
+    _verdict_changed = _curr.verdict != _base.verdict
+    _action_changed = _curr.action != _base.action
+
+    _impact_parts = []
+    if _db_score_s is not None and abs(_db_score_s) >= 40:
+        _impact_parts.append(f"P2 DB={_db_score_s:+.0f}")
+    if _pe_prob_s is not None:
+        _impact_parts.append(f"P3 PE={_pe_prob_s:.0f}%({_pe_dir_s})")
+    if _curr.signal_dte_degraded:
+        _min_dte_s = min(_dte_ctx_s["max_pain_dte"], _dte_ctx_s["flip_top_dte"])
+        _impact_parts.append(f"P4 DTE={_min_dte_s}j")
+
+    return {
+        "generated_at": _curr.generated_at,
+        "btc_price": snapshot.btc_price,
+        "baseline": {
+            "verdict": _base.verdict,
+            "confidence_pct": _base.confidence_pct,
+            "action": _base.action,
+            "state": _base.state,
+        },
+        "current": {
+            "verdict": _curr.verdict,
+            "confidence_pct": _curr.confidence_pct,
+            "global_confidence": _curr.global_confidence,
+            "action": _curr.action,
+            "state": _curr.state,
+            "signal_dte_degraded": _curr.signal_dte_degraded,
+            "pre_expiration_warning": _curr.pre_expiration_warning,
+        },
+        "delta": {
+            "confidence_delta": _conf_delta,
+            "verdict_changed": _verdict_changed,
+            "action_changed": _action_changed,
+        },
+        "active_phases": {
+            "p2_db_score": _db_score_s,
+            "p3_pe_direction": _pe_dir_s,
+            "p3_pe_probability": _pe_prob_s,
+            "p4_dte_context": _dte_ctx_s,
+            "p4_degraded": _curr.signal_dte_degraded,
+        },
+        "impact_summary": " | ".join(_impact_parts) if _impact_parts else "aucun modificateur actif",
     }
 
 
@@ -3431,6 +3723,269 @@ async def get_multi_index_history(
     if ticker not in allowed:
         return {"error": f"ticker must be one of {allowed}"}
     return _multi_idx.get_multi_index_history(ticker=ticker, limit=limit)
+
+
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PRO DECISION ENGINE
+# ─────────────────────────────────────────────────────────────────────────────
+
+@app.get("/api/pro_decision")
+async def get_pro_decision():
+    """
+    Moteur de décision "trader pro options".
+    Synthétise GEX, DEX, vol structure, probabilités, gravity, walls
+    pour produire une décision trading structurée avec raisonnement complet.
+    """
+    from .pro_decision_engine import compute_pro_decision
+    from dataclasses import asdict
+
+    try:
+        snap_obj = await deribit.get_cached_snapshot()
+        spot     = snap_obj.btc_price
+
+        # ── Calculs — exactement comme les autres endpoints ─────────────────
+        gex_obj  = compute_gex(snap_obj)
+        mopi_obj = compute_mopi(
+            snap_obj, gex_obj, iv_history_cache,
+            gex_near_cap=_gex_calibration_cache["cap_value"],
+            cap_mode=_gex_calibration_cache["cap_mode"],
+            saturation_rate_7d=_gex_calibration_cache.get("saturation_rate_7d"),
+        )
+        iv_rank  = mopi_obj.iv_rank
+        dex_obj  = compute_dealer_pressure(snap_obj)
+        dex_h    = compute_dex_levels(snap_obj)
+        grav_obj = compute_gravity_map(snap_obj, gex_obj)
+        walls_obj= compute_options_walls(snap_obj)
+        sq_obj   = compute_squeeze_score(snap_obj, gex_obj, dex_obj, iv_rank)
+
+        gex_audit  = compute_gex_activity_audit(snap_obj)
+        grav_audit = compute_gravity_activity_audit(snap_obj)
+        flip_audit = compute_flip_activity_audit(snap_obj, gex_obj.flip_level)
+        cal_diag   = diag_gex_calibration(_gex_calibration_cache)
+
+        nar_obj = resolve_narrative(
+            mopi_obj, gex_obj, dex_obj, grav_obj, walls_obj, sq_obj,
+            spot=spot,
+            audit=gex_audit,
+            dex_levels=dex_h,
+            gravity_audit=grav_audit,
+            flip_audit=flip_audit,
+            calibration_status=cal_diag.status,
+            calibration_reason_code=cal_diag.reason_code,
+        )
+
+        # Max pain pour probability engine
+        mp_near = getattr(gex_obj, "max_pain_near", None)
+        max_pain_strike = mp_near.strike if mp_near else 0.0
+        max_pain_dte    = mp_near.dte    if mp_near else 30
+        bf              = binance_feed.get_cache() or {}
+
+        pe_obj = compute_probability_engine(
+            spot=spot,
+            gex_near=gex_obj.gex_near,
+            flip_level=gex_obj.flip_level,
+            flip_use_in_signal=getattr(flip_audit, "use_in_signal", False),
+            dex_direction=dex_obj.direction,
+            dex_actionable_btc=abs(dex_h.actionable) if dex_h else 0.0,
+            iv_rank=iv_rank,
+            pc_ratio_near=mopi_obj.pc_ratio_near,
+            put_wall=walls_obj.major_put_wall or 0.0,
+            call_wall=walls_obj.major_call_wall or 0.0,
+            max_pain_strike=max_pain_strike,
+            max_pain_dte=max_pain_dte,
+            funding_rate=bf.get("funding_rate"),
+            futures_oi=bf.get("futures_oi"),
+            futures_oi_prev=bf.get("futures_oi_prev"),
+            spot_volume_24h=bf.get("spot_volume_24h"),
+            spot_volume_7d_avg=bf.get("spot_volume_7d_avg"),
+            gex_regime=gex_obj.regime_meca,
+            dex_score=(dex_obj.pressure_pct + 100.0) / 2.0,
+        )
+        pe_dict = probability_engine_to_dict(pe_obj)
+
+        # Directional bias
+        from .directional_bias import compute_directional_bias as _cdb
+        bias_raw = directional_bias_to_dict(
+            resolve_narrative(
+                mopi_obj, gex_obj, dex_obj, grav_obj, walls_obj, sq_obj,
+                spot=spot, audit=gex_audit, dex_levels=dex_h,
+                gravity_audit=grav_audit, flip_audit=flip_audit,
+                calibration_status=cal_diag.status,
+                calibration_reason_code=cal_diag.reason_code,
+            ).directional_bias
+        ) if nar_obj.directional_bias else {}
+
+        # Vol structure
+        try:
+            from .vol_structure import compute_vol_structure
+            vs_list  = compute_vol_structure(snap_obj) or []
+            vol_data = [{"expiry": x.expiry, "dte": x.dte, "iv": x.iv,
+                         "total_oi": x.total_oi, "oi_pct": x.oi_pct}
+                        for x in vs_list]
+        except Exception as e:
+            log.warning("[pro_decision] vol_structure: %s", e)
+            vol_data = []
+
+        # ── Sérialisation ─────────────────────────────────────────────────────
+        def _ser(obj):
+            if obj is None: return {}
+            if isinstance(obj, dict): return obj
+            return json.loads(json.dumps(
+                obj.__dict__ if hasattr(obj, '__dict__') else {},
+                default=lambda o: o.__dict__ if hasattr(o, '__dict__') else str(o)
+            ))
+
+        asym = getattr(grav_obj, "asymmetric_risk", None)
+        snap_dict = {
+            "spot": spot,
+            "dashboard": {
+                "btc_price":   spot,
+                "gex_total":   gex_obj.total_gex,
+                "gex_regime":  gex_obj.regime_meca,
+                "flip_level":  gex_obj.flip_level,
+                "iv_rank":     iv_rank,
+                "max_pain_near": {"strike": max_pain_strike, "dte": max_pain_dte} if max_pain_strike else None,
+            },
+            "squeeze":   _ser(sq_obj),
+            "dealer":    _ser(dex_obj),
+            "narrative": _ser(nar_obj),
+            "walls": {
+                "major_call_wall": walls_obj.major_call_wall,
+                "major_put_wall":  walls_obj.major_put_wall,
+            },
+        }
+        grav_dict = {
+            "strongest_magnet": getattr(grav_obj, "strongest_magnet", None),
+            "gravity_score":    getattr(grav_obj, "gravity_score", 0),
+            "zones": [
+                {"center": z.center, "zone_type": z.zone_type, "strength": z.strength,
+                 "label": z.label, "oi_usd": z.oi_usd, "gex": z.gex,
+                 "explosive_bias": z.explosive_bias}
+                for z in (grav_obj.zones if grav_obj else [])
+            ],
+            "asymmetric_risk": asym.__dict__ if hasattr(asym, "__dict__") else asym,
+        }
+
+        # ── Phase 1 fix H3 — VEX/CEX classification (identique à /api/decision) ──────
+        try:
+            from .vex_cex import compute_vex_cex as _cvc_pro
+            _vc_pro = _cvc_pro(snap_obj)
+        except Exception:
+            _vc_pro = None
+        _vexcex_inputs_pro = _VexCexInputs(
+            vex=getattr(_vc_pro, "vex_total", 0.0) or 0.0,
+            cex=getattr(_vc_pro, "cex_total", 0.0) or 0.0,
+            gex=gex_obj.total_gex,
+            dex=getattr(dex_obj, "net_delta_usd", getattr(dex_obj, "net_delta", 0.0)) or 0.0,
+            spot=spot,
+            vex_direction=getattr(_vc_pro, "vex_direction", None),
+            cex_direction=getattr(_vc_pro, "cex_direction", None),
+            flip_level=gex_obj.flip_level,
+            flip_dist_pct=(
+                (spot - gex_obj.flip_level) / spot * 100
+                if gex_obj.flip_level else None
+            ),
+            regime_meca=gex_obj.regime_meca,
+            regime_source=gex_obj.regime_source,
+            gex_flip_incoherent=gex_obj.gex_flip_incoherent,
+        )
+        _vexcex_regime_pro = classify_regime_vexcex(_vexcex_inputs_pro)
+
+        # ── P2 — Arbiter souverain : calculer confidence_pct pour cap conviction ─
+        _db_score_pro = bias_raw.get("score") if bias_raw else None
+        _arb_narrative = {
+            "contradictions": nar_obj.contradictions,
+            "data_stale": deribit.data_stale,
+            "range_mode": nar_obj.range_mode,
+            "asymmetric_side": nar_obj.asymmetric_side,
+            "gex_regime": gex_obj.regime_meca,
+            "dex_direction": dex_obj.direction,
+            "dex_activity_context": nar_obj.dex_activity_context,
+            "dex_activity_label": nar_obj.dex_activity_label,
+            "upside_ladder": nar_obj.upside_ladder,
+            "downside_ladder": nar_obj.downside_ladder,
+            "niveau_haut": nar_obj.niveau_haut,
+            "niveau_bas": nar_obj.niveau_bas,
+        }
+        # P3 — PE dominant pour l'Arbiter interne pro_decision
+        _pe_dir_pro = None
+        _pe_prob_pro = None
+        try:
+            _pb_pro = pe_dict.get("bull_24h", {}).get("probability", 50.0) or 50.0
+            _pbe_pro = pe_dict.get("bear_24h", {}).get("probability", 50.0) or 50.0
+            if abs(_pb_pro - 50) > abs(_pbe_pro - 50):
+                _pe_dir_pro = "BULL"
+                _pe_prob_pro = float(_pb_pro)
+            else:
+                _pe_dir_pro = "BEAR"
+                _pe_prob_pro = float(_pbe_pro)
+        except Exception:
+            pass
+
+        # P4 — DTE context pour TTL
+        _mp_display_pro = getattr(nar_obj, "max_pain_display", None) or {}
+        _flip_top_pro   = getattr(nar_obj, "flip_top_contributors", []) or []
+        _dte_ctx_pro = {
+            "max_pain_dte": _mp_display_pro.get("dte", 99),
+            "flip_top_dte": (_flip_top_pro[0].get("dte", 99) if _flip_top_pro else 99),
+        }
+
+        try:
+            _arb_result = _compute_decision(
+                narrative_data=_arb_narrative,
+                flip_use_in_signal=nar_obj.flip_use_in_signal,
+                gex_use_in_signal=nar_obj.gex_use_in_signal,
+                dex_use_in_signal=nar_obj.dex_use_in_signal,
+                directional_bias_score=_db_score_pro,
+                pe_dominant_direction=_pe_dir_pro,
+                pe_dominant_probability=_pe_prob_pro,
+                signal_dte_context=_dte_ctx_pro,
+                # Phase 1 fix H3 — VEX/CEX synchronisé (identique à /api/decision)
+                vexcex_regime_id=_vexcex_regime_pro.regime_id,
+                vexcex_phase=_vexcex_regime_pro.phase,
+                vexcex_urgency=_vexcex_regime_pro.urgency,
+                vexcex_label=_vexcex_regime_pro.label,
+            )
+            _arbiter_confidence_pct = _arb_result.confidence_pct
+            _pre_exp_warning_pro    = _arb_result.pre_expiration_warning
+            _min_dte_pro = min(_dte_ctx_pro["max_pain_dte"], _dte_ctx_pro["flip_top_dte"])
+        except Exception:
+            _arbiter_confidence_pct = 100  # fail-safe : ne pas brider si erreur
+            _pre_exp_warning_pro = None
+            _min_dte_pro = 99
+
+        # ── Décision finale ─────────────────────────────────────────────────
+        decision = compute_pro_decision(
+            snap               = snap_dict,
+            narrative          = _ser(nar_obj),
+            vol_structure_data = vol_data,
+            pe                 = pe_dict,
+            squeeze            = _ser(sq_obj),
+            directional_bias   = bias_raw,
+            gravity            = grav_dict,
+            walls              = snap_dict["walls"],
+            arbiter_confidence_pct      = _arbiter_confidence_pct,
+            pre_expiration_warning      = _pre_exp_warning_pro,
+            dominant_signal_dte         = _min_dte_pro,
+        )
+
+        _pro_payload = json.loads(json.dumps(
+            asdict(decision),
+            default=lambda o: o.__dict__ if hasattr(o, '__dict__') else str(o)
+        ))
+        return run_coherence_checks(_pro_payload, "/api/pro_decision")
+
+    except Exception as e:
+        log.error("[pro_decision] fatal: %s", e, exc_info=True)
+        return {"error": str(e), "timestamp": time.time()}
+
+
+@app.get("/api/admin/violations")
+async def get_violations():
+    """Phase 6 Sprint 2 — Tableau de bord des violations d'assertions runtime (rolling 200)."""
+    return _get_violations_summary()
 
 
 @app.get("/health")
