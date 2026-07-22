@@ -508,7 +508,7 @@ def _suggest_trade(
             type="WAIT",
             action="Aucun trade — attendre confirmation",
             rationale=(
-                f"Conviction insuffisante ({_bias_label(bias_score) if abs(bias_score) >= 25 else conviction_label}). "
+                "Conviction insuffisante. "
                 "Les signaux sont contradictoires ou manquent de confluence. "
                 "Un pro attend un setup de qualité, pas n'importe quel trade."
             ),
