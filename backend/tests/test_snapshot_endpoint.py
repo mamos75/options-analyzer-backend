@@ -41,7 +41,7 @@ def test_snapshot_endpoint_is_registered_in_routes():
             del sys.modules[m]
 
         from backend.main import app
-        routes = [r.path for r in app.routes]
+        routes = [r.path for r in app.routes if hasattr(r, "path")]
         assert "/api/snapshot" in routes, (
             f"/api/snapshot non trouve dans les routes. Routes disponibles: "
             f"{[r for r in routes if 'snapshot' in r or 'dashboard' in r]}"

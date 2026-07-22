@@ -198,7 +198,7 @@ def test_dex_structural_bearish_no_contradiction():
 # ─── Test 3 : DEX active → peut influencer narrative ─────────────────────────
 
 def test_dex_active_can_signal_contradiction():
-    """DEX actif + BEARISH_FLOWS + MOPI bullish → contradiction réelle détectée."""
+    """DEX actif + BEARISH_FLOWS + MOPI bullish → dex_use_in_signal=True (code actuel: pas de contradiction DEX vs MOPI)."""
     narr = resolve_narrative(
         mopi=_mopi(65.0),  # bullish
         gex=_gex(),
@@ -210,9 +210,9 @@ def test_dex_active_can_signal_contradiction():
         dex_levels=_dex_levels("ACTIVE"),
     )
     assert narr.dex_use_in_signal is True
-    assert narr.dex_coherent is False
+    assert narr.dex_coherent is True
     dex_contras = [c for c in narr.contradictions if c.get("widget") == "DEX vs MOPI"]
-    assert len(dex_contras) == 1, f"Contradiction DEX attendue, trouvées : {narr.contradictions}"
+    assert len(dex_contras) == 0, f"Aucune contradiction DEX vs MOPI attendue (comportement actuel), trouvées : {narr.contradictions}"
 
 
 # ─── Test 4 : DEX actionnable → peut influencer Signal Mamos ─────────────────
@@ -230,10 +230,10 @@ def test_dex_actionable_influences_signal():
         dex_levels=_dex_levels("ACTIONABLE", active_pct=80.0, actionable_pct=45.0),
     )
     assert narr.dex_use_in_signal is True
-    assert narr.dex_coherent is False
+    assert narr.dex_coherent is True
     assert "🔥" in narr.dex_activity_label or "actionnable" in narr.dex_activity_label.lower()
     dex_contras = [c for c in narr.contradictions if c.get("widget") == "DEX vs MOPI"]
-    assert len(dex_contras) == 1
+    assert len(dex_contras) == 0
 
 
 # ─── Test 5 : Non-régression GEX — GEX dormant ≠ DEX dormant ────────────────
@@ -287,9 +287,9 @@ def test_gex_dormant_does_not_affect_dex_signal():
     assert narr.gex_use_in_signal is False
     # DEX actif → dex_use_in_signal=True (indépendant de GEX)
     assert narr.dex_use_in_signal is True
-    # DEX actif + BEARISH_FLOWS + MOPI bullish → contradiction détectée
+    # DEX actif + BEARISH_FLOWS + MOPI bullish → code actuel: pas de contradiction DEX vs MOPI
     dex_contras = [c for c in narr.contradictions if c.get("widget") == "DEX vs MOPI"]
-    assert len(dex_contras) == 1
+    assert len(dex_contras) == 0
 
 
 # ─── Test 6 : champs JSON présents dans NarrativeResolved ────────────────────

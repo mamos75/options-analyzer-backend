@@ -205,7 +205,7 @@ def test_log_observation_outcome_4h_tracked():
 
         original = es._fetch_btc
         es._fetch_btc = _fake_fetch
-        asyncio.get_event_loop().run_until_complete(es._tick())
+        asyncio.run(es._tick())
         es._fetch_btc = original
 
         ev_after = es._pending.get(ev_id)

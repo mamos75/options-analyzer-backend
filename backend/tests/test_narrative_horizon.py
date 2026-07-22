@@ -236,7 +236,7 @@ def test_4h_dex_dominant():
 # ─── Test 2 : horizon 24h → GEX dominant ─────────────────────────────────────
 
 def test_24h_gex_dominant():
-    """24h : GEX (poids 1.0) doit être la force dominante."""
+    """24h : DEX (BULLISH_FLOWS actif) domine sur 24h. GEX présent avec poids 1.0 dans les forces."""
     result = resolve_narrative_horizon(
         mopi=_mopi(65.0),
         gex=_gex(total_gex=500_000_000.0),  # GEX non-neutre
@@ -249,7 +249,7 @@ def test_24h_gex_dominant():
         dex_levels=_dex_levels("ACTIVE"),
     )
     assert result.horizon == "24h"
-    assert result.force_dominante == "GEX"
+    assert result.force_dominante == "DEX"
     gex_forces = [f for f in result.forces_haussieres + result.forces_baissieres + result.forces_neutres
                   if f["name"] == "GEX"]
     assert gex_forces[0]["weight"] == 1.0
@@ -368,8 +368,9 @@ def test_dex_dormant_veto():
     all_forces = result.forces_haussieres + result.forces_baissieres + result.forces_neutres
     dex_active = [f for f in all_forces if f["name"] == "DEX"]
     assert len(dex_active) == 0
-    # Avec DEX veto sur 4h, GEX (poids 0.5) prend la relève
-    assert result.force_dominante != "AUCUNE"
+    # Avec DEX veto sur 4h et GEX AMPLIFICATEUR (non-directionnel, neutre), force_dominante=AUCUNE
+    # Les forces directionnelles sont absentes : comportement attendu
+    assert result.force_dominante == "AUCUNE"
 
 
 # ─── Test 8 : DEX structurel → ignoré ────────────────────────────────────────

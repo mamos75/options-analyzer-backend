@@ -217,7 +217,7 @@ def test_wall_near_high_volume_short_dte_actionable():
     # actionable_pct ≈ prox × dte_urg × 100 = 0.9 × 0.8 × 100 = 72% → ACTIONABLE
     near_strike = BTC_SPOT * 1.01
     opts = [
-        _opt(near_strike, "call", oi=500, volume=400.0, expiry="03JUN26"),
+        _opt(near_strike, "call", oi=500, volume=400.0, expiry="25JUL26"),
     ]
     scores = compute_structural_active_actionable(opts, BTC_SPOT, use_dealer_delta=False)
     assert scores.profile == TAG_ACTIONABLE, (

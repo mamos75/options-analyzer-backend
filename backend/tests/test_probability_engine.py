@@ -40,7 +40,6 @@ def _neutral_params(**overrides):
         call_wall=65_000.0,
         max_pain_strike=60_000.0,
         max_pain_dte=10,
-        mopi_score=50.0,
         gex_near_prev=None,
     )
     defaults.update(overrides)
@@ -267,7 +266,6 @@ def test_bullish_convergence_produces_bull_dominant():
         pc_ratio_near=0.7,
         max_pain_strike=65_000.0,
         max_pain_dte=2,
-        mopi_score=68.0,
         gex_near_prev=200_000_000,  # GEX en expansion
     )
     # Le scénario dominant doit être haussier

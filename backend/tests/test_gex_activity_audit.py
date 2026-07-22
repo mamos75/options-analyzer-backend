@@ -120,8 +120,8 @@ def test_dormant_options_no_volume():
     """Options sans volume → toutes DORMANT, signal peu fiable."""
     # Expiry future (DTE > 0) pour que les options ne soient pas filtrées
     opts = [
-        _make_option(100_000, "call", oi=500, volume=0, expiry="27JUN26"),
-        _make_option(100_000, "put",  oi=500, volume=0, expiry="27JUN26"),
+        _make_option(100_000, "call", oi=500, volume=0, expiry="26SEP26"),
+        _make_option(100_000, "put",  oi=500, volume=0, expiry="26SEP26"),
     ]
     audit = compute_gex_activity_audit(_snapshot(opts))
     assert audit.dormant.count == 2

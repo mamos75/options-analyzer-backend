@@ -64,7 +64,6 @@ def _make_pe_output(spot: float = 60_000.0):
         call_wall=63_000.0,
         max_pain_strike=61_000.0,
         max_pain_dte=3,
-        mopi_score=45.0,
         gex_near_prev=-150_000_000.0,
         funding_rate=0.0001,
         futures_oi=6_000_000_000.0,
@@ -83,7 +82,6 @@ def _features(spot: float = 60_000.0) -> dict:
         "dex_direction": "BEARISH_FLOWS",
         "iv_rank": 55.0,
         "pc_ratio_near": 1.1,
-        "mopi_score": 45.0,
         "flip_distance_pct": -0.03,
         "gex_regime": "AMPLIFICATEUR",
     }

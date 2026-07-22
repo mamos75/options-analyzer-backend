@@ -42,7 +42,7 @@ BTC_SPOT = 100_000.0
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 
-def _opt(strike, opt_type, oi=500, volume=0.0, gamma=0.0001, expiry="27JUN26", delta=0.5):
+def _opt(strike, opt_type, oi=500, volume=0.0, gamma=0.0001, expiry="26SEP26", delta=0.5):
     return OptionData(
         instrument=f"BTC-{expiry}-{int(strike)}-{'C' if opt_type == 'call' else 'P'}",
         strike=strike, expiry=expiry, option_type=opt_type,
@@ -67,8 +67,8 @@ def _mopi(score=55.0):
 
 def _gex_profile(flip=98_000.0, regime="AMPLIFICATEUR", total=1_500_000_000.0):
     mp = MaxPainProfile(
-        near=MaxPainExpiry(strike=BTC_SPOT, expiry="27JUN26", dte=391, oi_total=1000),
-        institutional=MaxPainExpiry(strike=BTC_SPOT, expiry="27JUN26", dte=391, oi_total=1000),
+        near=MaxPainExpiry(strike=BTC_SPOT, expiry="26SEP26", dte=391, oi_total=1000),
+        institutional=MaxPainExpiry(strike=BTC_SPOT, expiry="26SEP26", dte=391, oi_total=1000),
     )
     return GEXProfile(
         total_gex=total,
@@ -139,8 +139,8 @@ def _dex_levels():
 def test_flip_dormant_when_no_volume():
     """Options sans flux → flip DORMANT, use_in_signal=False."""
     opts = [
-        _opt(98_000, "put",  oi=600, volume=0, gamma=0.0002, expiry="27JUN26"),
-        _opt(98_000, "call", oi=400, volume=0, gamma=0.0001, expiry="27JUN26"),
+        _opt(98_000, "put",  oi=600, volume=0, gamma=0.0002, expiry="26SEP26"),
+        _opt(98_000, "call", oi=400, volume=0, gamma=0.0001, expiry="26SEP26"),
     ]
     fa = compute_flip_activity_audit(_snap(opts), flip_level=98_000.0)
     assert fa.flip_activity_tag == TAG_DORMANT
@@ -152,9 +152,9 @@ def test_dormant_pct_60_forces_dormant():
     """dormant_pct > 60% → flip_use_in_signal=False indépendamment du reste."""
     opts = [
         # 70% dormant (grand OI, zéro volume)
-        _opt(98_000, "put",  oi=700, volume=0,   gamma=0.0002, expiry="27JUN26"),
+        _opt(98_000, "put",  oi=700, volume=0,   gamma=0.0002, expiry="26SEP26"),
         # 30% active
-        _opt(98_000, "call", oi=300, volume=200, gamma=0.0001, expiry="27JUN26"),
+        _opt(98_000, "call", oi=300, volume=200, gamma=0.0001, expiry="26SEP26"),
     ]
     fa = compute_flip_activity_audit(_snap(opts), flip_level=98_000.0)
     assert fa.window_dormant_pct > 60
@@ -167,8 +167,8 @@ def test_actionable_pct_35_forces_actionable():
     # Options ATM avec volume important (flux élevé) → ACTIONABLE
     opts = [
         # Strike AT flip level (prox=1.0), volume/oi = 0.8, DTE court → urgency=0.8
-        _opt(98_000, "put",  oi=500, volume=400, gamma=0.0002, expiry="27JUN26"),
-        _opt(98_000, "call", oi=500, volume=400, gamma=0.0001, expiry="27JUN26"),
+        _opt(98_000, "put",  oi=500, volume=400, gamma=0.0002, expiry="26SEP26"),
+        _opt(98_000, "call", oi=500, volume=400, gamma=0.0001, expiry="26SEP26"),
     ]
     fa = compute_flip_activity_audit(_snap(opts), flip_level=98_000.0)
     # Avec prox=1.0 × urgency (DTE>30=0.05) → product=0.05 → ACTIVE pas ACTIONABLE
@@ -201,7 +201,7 @@ def test_flip_zero_returns_dormant():
 def test_flip_no_options_in_window():
     """Aucune option dans ±10% du flip → DORMANT."""
     # Options très loin du flip_level (70k alors que flip=98k)
-    opts = [_opt(70_000, "put", oi=500, volume=200, expiry="27JUN26")]
+    opts = [_opt(70_000, "put", oi=500, volume=200, expiry="26SEP26")]
     fa = compute_flip_activity_audit(_snap(opts), flip_level=98_000.0)
     assert fa.flip_activity_tag == TAG_DORMANT
     assert fa.flip_use_in_signal is False
@@ -212,8 +212,8 @@ def test_flip_active_when_sufficient_flow():
     # Options dans ±10% du flip, avec flux, mais DTE long (urgency=0.05)
     # prox à flip=1.0 × urgency=0.05 = 0.05 → ACTIVE (≥0.05)
     opts = [
-        _opt(98_000, "put",  oi=500, volume=300, gamma=0.0002, expiry="27JUN26"),
-        _opt(98_500, "call", oi=500, volume=300, gamma=0.0001, expiry="27JUN26"),
+        _opt(98_000, "put",  oi=500, volume=300, gamma=0.0002, expiry="26SEP26"),
+        _opt(98_500, "call", oi=500, volume=300, gamma=0.0001, expiry="26SEP26"),
     ]
     fa = compute_flip_activity_audit(_snap(opts), flip_level=98_000.0)
     # Avec flow=0.6, prox~1.0, urgency=0.05 → product=0.05 → ACTIVE
@@ -449,8 +449,8 @@ def test_build_synthese_active_flip_normal_phrase():
 def test_narrative_flip_none_pas_seuil_gex():
     """flip_level=None + flip_available=False → phrase_synthese sans aucune mention de seuil GEX."""
     mp = MaxPainProfile(
-        near=MaxPainExpiry(strike=BTC_SPOT, expiry="27JUN26", dte=26, oi_total=1000),
-        institutional=MaxPainExpiry(strike=BTC_SPOT, expiry="27JUN26", dte=26, oi_total=1000),
+        near=MaxPainExpiry(strike=BTC_SPOT, expiry="26SEP26", dte=26, oi_total=1000),
+        institutional=MaxPainExpiry(strike=BTC_SPOT, expiry="26SEP26", dte=26, oi_total=1000),
     )
     gex_no_flip = GEXProfile(
         total_gex=-1_500_000_000.0,
@@ -501,7 +501,7 @@ def test_no_regression_narrative_without_flip_audit():
 
 def test_no_regression_flip_audit_structure():
     """FlipActivityAudit a tous les champs requis par la spec."""
-    opts = [_opt(98_000, "put", oi=500, volume=100, expiry="27JUN26")]
+    opts = [_opt(98_000, "put", oi=500, volume=100, expiry="26SEP26")]
     fa = compute_flip_activity_audit(_snap(opts), flip_level=98_000.0)
 
     assert hasattr(fa, "flip_level")
